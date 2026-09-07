@@ -2,6 +2,8 @@
 
 from __future__ import annotations
 
+import math
+
 import numpy as np
 import pytest
 
@@ -24,6 +26,7 @@ from artisanlib.mpc_controller import (
     MpcConfig,
     phase_cost_scales,
     predict_horizon_phase,
+    smooth_fc_command,
 )
 
 
@@ -91,7 +94,7 @@ class TestMpcConstraints:
             assert 0 <= hp <= 100
             assert 0 <= fc <= 100
             assert abs(hp - hp_prev) <= config.heater_slew_pct_per_sec + 1
-            assert abs(fc - fc_prev) <= config.fan_slew_pct_per_sec + 1
+            assert abs(fc - fc_prev) <= mpc.mpc.fc_slew_pct_per_sec + 1
             hp_prev, fc_prev = hp, fc
 
     def test_timeout_falls_back_to_energy(self, config: HybridControllerConfig) -> None:
@@ -128,6 +131,59 @@ class TestMpcConstraints:
         mpc.update(170.0, 220.0, 12.0, 0.0, [0, 1, 0, 0, 0, 0, 0, 0], 1.0)
         assert mpc.diagnostics.backend == 'mpc'
         assert isinstance(mpc.diagnostics.pred_ror, float)
+
+
+class TestFanSmoothing:
+    def test_deadband_holds_small_moves(self) -> None:
+        assert smooth_fc_command(40.0, 41.5, slew_pct_per_sec=8.0, deadband_pct=3.0, dt=1.0) == 40.0
+        moved = smooth_fc_command(40.0, 50.0, slew_pct_per_sec=8.0, deadband_pct=3.0, dt=1.0)
+        assert moved == pytest.approx(48.0)
+        assert moved != 40.0
+
+    def test_slew_caps_large_jumps(self) -> None:
+        # 8 %/s * 1.5 s = 12 points max
+        out = smooth_fc_command(20.0, 100.0, slew_pct_per_sec=8.0, deadband_pct=3.0, dt=1.5)
+        assert out == pytest.approx(32.0)
+
+    def test_noisy_ror_fc_travel_below_legacy_weights(
+        self, config: HybridControllerConfig,
+    ) -> None:
+        """Field A/B P2/P3: default MPC must not bang-bang the fan on noisy RoR."""
+        plant = KaleidoModelParams()
+        timeindex = [0, 1, 0, 0, 0, 0, 0, 0]
+
+        def fc_travel(mpc_cfg: MpcConfig) -> float:
+            backend = MPCBackend(config, mpc_cfg)
+            backend.activate()
+            backend._last_hp = 80.0
+            backend._last_fc = 40.0
+            x = np.array([175.0, 220.0, 70.0], dtype=float)
+            prev_bt = float(x[0])
+            prev_fc = 40
+            travel = 0.0
+            for t in range(1, 46):
+                bt = float(x[0])
+                et = float(x[1])
+                ror = ror_c_per_min(prev_bt, bt, 1.0) if t > 1 else 12.0
+                ror += 3.0 * math.sin(t * 0.9) + (2.0 if t % 2 == 0 else -2.0)
+                _hp, fc = backend.update(bt, et, ror, 0.0, timeindex, float(t))
+                travel += abs(fc - prev_fc)
+                prev_fc = fc
+                prev_bt = bt
+                x = step(x, np.array([float(_hp), float(fc)]), 1.0, plant)
+            return travel
+
+        calm = MpcConfig(
+            horizon=12, maxiter=20, solver_timeout_ms=250.0, model=plant)
+        twitchy = MpcConfig(
+            horizon=12, maxiter=20, solver_timeout_ms=250.0, model=plant,
+            w_dfc=0.5, w_fc_base=0.025, w_fc_reverse=0.0,
+            fc_block=2, fc_slew_pct_per_sec=20.0, fc_deadband_pct=0.0)
+        calm_travel = fc_travel(calm)
+        twitchy_travel = fc_travel(twitchy)
+        assert calm_travel < twitchy_travel, (
+            f'calm FC travel {calm_travel:.0f} should beat twitchy {twitchy_travel:.0f}')
+        assert calm_travel < 220.0
 
 
 def _closed_loop_ror_rmse(

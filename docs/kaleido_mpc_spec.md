@@ -520,17 +520,19 @@ J = Σ_k [ w_ror   * (RoR[k] - RoR_ref[k])²
          + w_offset * (ET[k] - BT[k] - offset_ref[k])² ]
 ```
 
-Suggested default weights (to be tuned):
+Suggested default weights (field-tuned after Study 1 fan hunting):
 
 | Weight | Default | Notes |
 |--------|---------|-------|
 | `w_ror` | 3.0 | Primary tracking |
 | `w_accel` | 2.0 | Dampens overshoot / first-crack runaway |
 | `w_dhp` | 0.5 | Heater movement penalty |
-| `w_dfc` | 0.5 | Fan movement penalty |
+| `w_dfc` | 3.0 | Fan movement penalty (was 0.5; raised so FC is not a bang-bang RoR actuator) |
 | `w_offset` | 1.0 | ET−BT phase schedule |
+| `w_fc_base` | 0.12 | Pull toward phase baseline fan |
+| `w_fc_reverse` | 4.0 | Extra cost when first-step ΔFC flips sign |
 
-Align initial values with existing `HybridControllerConfig` keys in `main.py` where applicable.
+MPC fan path is **not** the Energy slew: `fc_slew_pct_per_sec=8`, `fc_deadband_pct=3`, `fc_block=4`. Applied FC is slewed then deadbanded after the solve (`smooth_fc_command`).
 
 ---
 
@@ -895,7 +897,7 @@ Not part of initial MPC implementation; specified for Phase C.
 
 - Mock `KaleidoPort`; verify `sample_processing` calls MPC when backend=`mpc`
 - Verify HP/FC not double-commanded by Energy and MPC simultaneously
-- Field A/B: same bean lot; Energy vs MPC; compare RoR RMSE vs schedule, max RoR, actuator travel
+- Field: weekly 600 g Hybrid refinement (MPC daily driver, Energy abort). See [`hybrid_field_ab_plan.md`](hybrid_field_ab_plan.md). Compare RoR shape and actuator travel to last week / an Energy reference; do not require same-day A/B pairs.
 
 ---
 

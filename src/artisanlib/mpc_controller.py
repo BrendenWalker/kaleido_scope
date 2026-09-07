@@ -25,6 +25,7 @@ from artisanlib.hybrid_controller import (
     HybridControllerConfig,
     HybridDiagnostics,
     RoastPhase,
+    apply_slew,
     detect_roast_phase,
     interpolate_ror_target,
 )
@@ -46,13 +47,32 @@ class MpcConfig:
     w_ror: float = 3.0
     w_accel: float = 2.0
     w_dhp: float = 0.5
-    w_dfc: float = 0.5
+    w_dfc: float = 3.0
     w_offset: float = 1.0
+    w_fc_base: float = 0.12
+    w_fc_reverse: float = 4.0
     solver_timeout_ms: float = 50.0
     hp_block: int = 5
-    fc_block: int = 2
+    fc_block: int = 4
+    # MPC-only fan path (Energy keeps HybridControllerConfig.fan_slew_pct_per_sec)
+    fc_slew_pct_per_sec: float = 8.0
+    fc_deadband_pct: float = 3.0
     maxiter: int = 40
     model: KaleidoModelParams = field(default_factory=KaleidoModelParams)
+
+
+def smooth_fc_command(
+    last_fc: float,
+    target_fc: float,
+    slew_pct_per_sec: float,
+    deadband_pct: float,
+    dt: float,
+) -> float:
+    """Slew toward the solver FC, then ignore moves smaller than the deadband."""
+    slewed = apply_slew(last_fc, target_fc, slew_pct_per_sec, dt)
+    if abs(slewed - last_fc) < max(0.0, deadband_pct):
+        return last_fc
+    return slewed
 
 
 def _clip(x: float, lo: float, hi: float) -> float:
@@ -77,16 +97,20 @@ def predict_horizon_phase(
 
 
 def phase_cost_scales(phase: RoastPhase, config: HybridControllerConfig) -> tuple[float, float, float]:
-    """Return (w_accel, w_dhp, w_dfc) scales favoring air after first crack."""
+    """Return (w_accel, w_dhp, w_dfc) scales favoring air after first crack.
+
+    ``w_dfc`` stays high in every phase so the solver will not use the fan as a
+    bang-bang RoR actuator (field A/B P2/P3 hunting).
+    """
     heater_w = config.phase_heater_weight.get(phase, 0.5)
     air_w = max(0.0, 1.0 - heater_w)
-    # Accel & FC movement matter more late; HP movement penalized more late
+    # Accel & HP movement matter more late; FC movement is expensive throughout
     w_accel = 1.0 + 1.2 * air_w
     w_dhp = 1.0 + 1.5 * air_w
-    w_dfc = 1.0 + 0.35 * air_w
+    w_dfc = 1.6 + 0.4 * air_w
     if phase in (RoastPhase.FirstCrack, RoastPhase.Development):
         w_accel *= 1.35
-        w_dfc *= 1.25
+        w_dfc *= 1.15
     return w_accel, w_dhp, w_dfc
 
 
@@ -103,7 +127,7 @@ class MPCBackend:
 
     __slots__ = (
         'config', 'mpc', 'energy', 'backend_name', 'active', 'diagnostics',
-        '_last_update_time', '_last_hp', '_last_fc', '_e_element',
+        '_last_update_time', '_last_hp', '_last_fc', '_last_dfc', '_e_element',
         '_u_warm', '_fallback_count',
     )
 
@@ -122,6 +146,7 @@ class MPCBackend:
         self._last_update_time: float | None = None
         self._last_hp = 0.0
         self._last_fc = 0.0
+        self._last_dfc = 0.0
         self._e_element = 0.0
         self._u_warm: np.ndarray | None = None
         self._fallback_count = 0
@@ -131,6 +156,7 @@ class MPCBackend:
         self._last_update_time = None
         self._last_hp = 0.0
         self._last_fc = 0.0
+        self._last_dfc = 0.0
         self._e_element = 0.0
         self._u_warm = None
         self._fallback_count = 0
@@ -192,9 +218,8 @@ class MPCBackend:
         if used_fallback:
             self._fallback_count += 1
             _log.warning('MPC fallback to Energy (count=%s)', self._fallback_count)
-            hp, fc = energy_hp, energy_fc
-            self._last_hp = float(hp)
-            self._last_fc = float(fc)
+            hp, fc = self._commit_actuators(
+                float(energy_hp), float(energy_fc), dt=dt, smooth_fc=False)
             twin = self.energy.energy.thermal_state
             self.diagnostics = HybridDiagnostics(
                 hp=hp, fc=fc, phase=int(phase), target_ror=target_ror,
@@ -202,9 +227,8 @@ class MPCBackend:
                 energy_bias=float(twin.energy_bias), backend='mpc', fallback=True)
             return hp, fc
 
-        hp, fc = solved
-        self._last_hp = float(hp)
-        self._last_fc = float(fc)
+        hp_star, fc_star = solved
+        hp, fc = self._commit_actuators(float(hp_star), float(fc_star), dt=dt)
         # Soft-update energy filter state toward commanded HP
         alpha = dt / (self.mpc.model.tau_element + dt)
         self._e_element = (1.0 - alpha) * self._e_element + alpha * self.mpc.model.K_hp * hp
@@ -213,6 +237,32 @@ class MPCBackend:
             hp=hp, fc=fc, phase=int(phase), target_ror=target_ror,
             current_ror=current_ror, pred_ror=float(twin.pred_ror),
             energy_bias=float(twin.energy_bias), backend='mpc', fallback=False)
+        return hp, fc
+
+    def _commit_actuators(
+        self,
+        hp_star: float,
+        fc_star: float,
+        dt: float,
+        smooth_fc: bool = True,
+    ) -> tuple[int, int]:
+        hp = int(round(_clip(hp_star, 0.0, 100.0)))
+        if smooth_fc:
+            fc_f = smooth_fc_command(
+                self._last_fc,
+                fc_star,
+                self.mpc.fc_slew_pct_per_sec,
+                self.mpc.fc_deadband_pct,
+                dt,
+            )
+        else:
+            fc_f = fc_star
+        fc = int(round(_clip(fc_f, 0.0, 100.0)))
+        dfc = float(fc) - self._last_fc
+        if abs(dfc) >= self.mpc.fc_deadband_pct:
+            self._last_dfc = dfc
+        self._last_hp = float(hp)
+        self._last_fc = float(fc)
         return hp, fc
 
     def _decision_dims(self) -> tuple[int, int]:
@@ -270,13 +320,15 @@ class MPCBackend:
             cost += mpc.w_offset * offset_err ** 2
             # Soft pull toward phase baselines (playbook bias)
             cost += 0.015 * (hp_seq[k] - base_hp) ** 2
-            cost += 0.025 * (fc_seq[k] - base_fc) ** 2
+            cost += mpc.w_fc_base * (fc_seq[k] - base_fc) ** 2
+            if k == 0 and d_fc * self._last_dfc < 0.0 and abs(d_fc) >= mpc.fc_deadband_pct:
+                cost += mpc.w_fc_reverse * d_fc ** 2
 
             # Soft slew penalties (hard constraints enforced via bounds expansion)
             hp_slew = cfg.heater_slew_pct_per_sec * dt
             if phase in (RoastPhase.FirstCrack, RoastPhase.Development):
                 hp_slew = min(hp_slew, 3.0 * dt)
-            fc_slew = cfg.fan_slew_pct_per_sec * dt
+            fc_slew = mpc.fc_slew_pct_per_sec * dt
             if abs(d_hp) > hp_slew:
                 cost += 20.0 * (abs(d_hp) - hp_slew) ** 2
             if abs(d_fc) > fc_slew:
@@ -313,7 +365,7 @@ class MPCBackend:
 
         # Box bounds 0-100; first-step slew as tightened box relative to last command
         hp_slew = self.config.heater_slew_pct_per_sec * max(dt, mpc.dt)
-        fc_slew = self.config.fan_slew_pct_per_sec * max(dt, mpc.dt)
+        fc_slew = mpc.fc_slew_pct_per_sec * max(dt, mpc.dt)
         if phase in (RoastPhase.FirstCrack, RoastPhase.Development):
             hp_slew = min(hp_slew, 3.0 * max(dt, mpc.dt))
 
