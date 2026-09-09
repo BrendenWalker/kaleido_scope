@@ -14,7 +14,7 @@ Discussions: <https://github.com/BrendenWalker/kaleido_scope/discussions>
     pip install -r requirements.txt
     python artisan.py
 
-Then Roast → Machine → Kaleido Network (or Kaleido Serial).
+Then Config → Machine → Kaleido Network (or Kaleido Serial). The menu checkmarks the live connection. After ON, the left SV slider is the warmup set value.
 
 ## License
 

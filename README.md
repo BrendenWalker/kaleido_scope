@@ -43,9 +43,9 @@ Phases follow DRY / FCs / FCe, with BT fallbacks. After FCs, Development starts 
 
 ## Roast flow (Hybrid)
 
-1. **Roast → Machine → Kaleido Network** or **Kaleido Serial**.
-2. **Config → Device:** Meter = Kaleido BT/ET, Control on, **Hybrid Controller** (Energy unless you are testing MPC).
-3. **ON**, set warmup **SV**, **Start Heating**. **START** only records; it does not change control.
+1. **Config → Machine → Kaleido Network** or **Kaleido Serial**. The menu checkmarks the live connection (Serial vs WiFi/Network).
+2. **Config → Device:** Meter = Kaleido BT/ET, Control on, **Hybrid Controller** (Energy unless you are testing MPC). Extra Devices can add Kaleido channels 139–141 and a logger (Phidget / TC4 / Yocto / Virtual).
+3. **ON**, set warmup **SV** on the left slider (Machine PID `TS`), **Start Heating**. **START** only records; it does not change control.
 4. **CHARGE** → Hybrid takes HP + FC.
 5. **DROP**, then **COOLDOWN**.
 
@@ -55,7 +55,7 @@ Manual fallback: PID off, sliders (FC = 1, HP = 4 in the Kaleido preset).
 
 Full sequence and exit criteria: [docs/ROADMAP.md](docs/ROADMAP.md).
 
-**Now:** Hybrid Energy, optional Lite MPC, COOLDOWN, Artisan logging. Roast → Machine is Kaleido Network / Serial only; extra loggers (Phidget / TC4 / Yocto / Virtual) can plot beside Kaleido.
+**Now:** Hybrid Energy, optional Lite MPC, COOLDOWN, Artisan logging. Config → Machine is Kaleido Network / Serial only (checkmark on the live connection). Extra loggers (Phidget / TC4 / Yocto / Virtual) can plot beside Kaleido. Preheat **SV** slider drives Machine PID `TS` until CHARGE.
 
 **Next:** M1 presets/schedule editor → M2 diagnostics + quiet MPC, then gated MPC default.
 
@@ -71,7 +71,7 @@ pip install -r requirements.txt
 python artisan.py
 ```
 
-Python 3.10+, Kaleido on WebSocket (`host` / port `80` / `/ws`) or serial. Load **Kaleido Network** or **Kaleido Serial**. Extra Devices can add Kaleido channels 139–141 and a generic logger (Phidget / Arduino TC4 / Yocto / Virtual).
+Python 3.10+, Kaleido on WebSocket (`host` / port `80` / `/ws`) or serial. Load **Kaleido Network** or **Kaleido Serial** (Config → Machine checkmarks Serial vs Network from the Device WiFi/serial flag). Extra Devices can add Kaleido channels 139–141 and a generic logger (Phidget / Arduino TC4 / Yocto / Virtual). After **ON**, the left **SV** slider is the warmup set value.
 
 ## Help Fund Artisan Scope
 
