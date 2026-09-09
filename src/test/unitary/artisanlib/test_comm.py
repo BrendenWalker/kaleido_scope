@@ -44,3 +44,19 @@ def test_dummy_returns_zeros() -> None:
         assert tx == 1.5
         assert a == 0
         assert b == 0
+
+def test_devicefunctionlist_logger_drivers() -> None:
+    with patch('serial.Serial'), patch('artisanlib.comm.QSemaphore'), patch(
+        'artisanlib.comm.platform'
+    ) as mock_platform:
+        mock_platform.system.return_value = 'Linux'
+        ser = serialport(Mock())
+        assert ser.devicefunctionlist[19].__func__ is ser.ARDUINOTC4.__func__
+        assert ser.devicefunctionlist[28].__func__ is ser.ARDUINOTC4_34.__func__
+        assert ser.devicefunctionlist[34].__func__ is ser.PHIDGET1048.__func__
+        assert ser.devicefunctionlist[45].__func__ is ser.YOCTO_thermo.__func__
+        assert ser.devicefunctionlist[25].__func__ is ser.virtual.__func__
+        assert ser.devicefunctionlist[139].__func__ is ser.Kaleido_SVAT.__func__
+        assert ser.devicefunctionlist[53].__func__ is ser.DUMMY.__func__
+        assert ser.devicefunctionlist[83].__func__ is ser.DUMMY.__func__
+        assert ser.devicefunctionlist[142].__func__ is ser.DUMMY.__func__

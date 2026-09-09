@@ -30,6 +30,7 @@ setuptools==82.0.1
 wheel==0.47.0
 pyserial==3.5
 pymodbus==3.13.1
+Phidget22==1.24.20260127
 Unidecode==1.4.0
 qrcode==8.2
 requests==2.34.2
@@ -59,6 +60,7 @@ pillow==12.1.1
 pydantic==2.13.4
 babel==2.18.0
 python-statemachine==3.0.0
+yoctopuce==2.1.15129
 PyQt6==6.11.0
 PyQt6-WebEngine==6.11.0
 qt6-tools==6.5.0.1.3

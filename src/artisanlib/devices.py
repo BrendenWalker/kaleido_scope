@@ -35,7 +35,7 @@ from artisanlib.widgets import MyContentLimitedQComboBox, MyQComboBox
 _log: Final[logging.Logger] = logging.getLogger(__name__)
 
 from PyQt6.QtCore import (Qt, pyqtSlot, QSettings, QTimer, QRegularExpression)
-from PyQt6.QtGui import (QColor, QIntValidator, QRegularExpressionValidator)
+from PyQt6.QtGui import (QColor, QIntValidator, QRegularExpressionValidator, QStandardItem, QStandardItemModel)
 from PyQt6.QtWidgets import (QApplication, QWidget, QCheckBox, QVBoxLayout, QHBoxLayout, QLabel, QLineEdit,
                              QPushButton, QSpinBox, QTabWidget, QComboBox, QDialogButtonBox, QGridLayout,
                              QGroupBox, QRadioButton, QButtonGroup,
@@ -51,6 +51,8 @@ class DeviceAssignmentDlg(ArtisanResizeablDialog):
 
         self.helpdialog:HelpDlg|None = None
 
+        self.org_phidgetRemoteFlag = self.aw.qmc.phidgetRemoteFlag
+        self.org_yoctoRemoteFlag = self.aw.qmc.yoctoRemoteFlag
         self.org_kaleidoSerial = self.aw.kaleidoSerial
 
         self.org_ambientTempSource = self.aw.qmc.ambientTempSource
@@ -187,7 +189,811 @@ class DeviceAssignmentDlg(ArtisanResizeablDialog):
         self.recalcButton.setToolTip(QApplication.translate('Tooltip','Recaclulates all Virtual Devices and updates their values in the profile'))
         self.recalcButton.clicked.connect(self.updateVirtualdevicesinprofile_clicked)
         self.enableDisableAddDeleteButtons()
+        ####################################################
+        #Arduino TC4 channel config
+        arduinoChannels = ['None','1','2','3','4']
+        arduinoETLabel =QLabel(QApplication.translate('Label', 'ET Channel'))
+        self.arduinoETComboBox = QComboBox()
+        self.arduinoETComboBox.addItems(arduinoChannels)
+        arduinoBTLabel =QLabel(QApplication.translate('Label', 'BT Channel'))
+        self.arduinoBTComboBox = QComboBox()
+        self.arduinoBTComboBox.addItems(arduinoChannels)
+        try:
+            self.arduinoETComboBox.setCurrentIndex(arduinoChannels.index(self.aw.ser.arduinoETChannel))
+        except Exception: # pylint: disable=broad-except
+            pass
+        try:
+            self.arduinoBTComboBox.setCurrentIndex(arduinoChannels.index(self.aw.ser.arduinoBTChannel))
+        except Exception: # pylint: disable=broad-except
+            pass
+        arduinoATLabel =QLabel(QApplication.translate('Label', 'AT Channel'))
+
+        arduinoTemperatures = ['None','T1','T2','T3','T4','T5','T6']
+        self.arduinoATComboBox = QComboBox()
+        self.arduinoATComboBox.addItems(arduinoTemperatures)
+        self.arduinoATComboBox.setCurrentIndex(arduinoTemperatures.index(self.aw.ser.arduinoATChannel))
+        self.showControlButton = QCheckBox(QApplication.translate('CheckBox', 'PID Firmware'))
+        self.showControlButton.setChecked(self.aw.qmc.PIDbuttonflag)
+        self.showControlButton.stateChanged.connect(self.PIDfirmwareToggle)
+        FILTLabel =QLabel(QApplication.translate('Label', 'Filter'))
+        self.FILTspinBoxes:list[QSpinBox] = []
+        for i in range(4):
+            spinBox = QSpinBox()
+            spinBox.setAlignment(Qt.AlignmentFlag.AlignRight)
+            spinBox.setRange(0,99)
+            spinBox.setSingleStep(5)
+            spinBox.setSuffix(' %')
+            spinBox.setValue(int(self.aw.ser.ArduinoFILT[i]))
+            self.FILTspinBoxes.append(spinBox)
+        ####################################################
         ##########     LAYOUTS
+
+        # create Phidget box
+        phidgetProbeTypeItems = ['K', 'J', 'E', 'T']
+        phidgetBox1048 = QGridLayout()
+        self.asyncCheckBoxes1048 = []
+        self.changeTriggerCombos1048 = []
+        self.probeTypeCombos = []
+        for i in range(1,5):
+            changeTriggersCombo = QComboBox()
+            changeTriggersCombo.setFocusPolicy(Qt.FocusPolicy.NoFocus)
+            model = cast(QStandardItemModel, changeTriggersCombo.model())
+            changeTriggerItems = self.createItems(self.aw.qmc.phidget1048_changeTriggersStrings)
+            for item in changeTriggerItems:
+                model.appendRow(item)
+            try:
+                changeTriggersCombo.setCurrentIndex(self.aw.qmc.phidget1048_changeTriggersValues.index(self.aw.qmc.phidget1048_changeTriggers[i-1]))
+            except Exception: # pylint: disable=broad-except
+                pass
+
+            changeTriggersCombo.setMinimumContentsLength(1)
+            changeTriggersCombo.setSizeAdjustPolicy(QComboBox.SizeAdjustPolicy.AdjustToContents) # AdjustToMinimumContentsLengthWithIcon
+            changeTriggersCombo.setEnabled(bool(self.aw.qmc.phidget1048_async[i-1]))
+            width = changeTriggersCombo.minimumSizeHint().width()
+            changeTriggersCombo.setMinimumWidth(width)
+            if platform.system() == 'Darwin':
+                changeTriggersCombo.setMaximumWidth(width)
+
+            self.changeTriggerCombos1048.append(changeTriggersCombo)
+            phidgetBox1048.addWidget(changeTriggersCombo,3,i)
+            asyncFlag = QCheckBox()
+            self.asyncCheckBoxes1048.append(asyncFlag)
+            asyncFlag.setFocusPolicy(Qt.FocusPolicy.NoFocus)
+            asyncFlag.setChecked(True)
+            phidgetBox1048.addWidget(asyncFlag,2,i)
+            asyncFlag.stateChanged.connect(self.asyncFlagStateChanged1048)
+            asyncFlag.setChecked(self.aw.qmc.phidget1048_async[i-1])
+            probeTypeCombo = QComboBox()
+            probeTypeCombo.setFocusPolicy(Qt.FocusPolicy.NoFocus)
+            model = cast(QStandardItemModel, probeTypeCombo.model())
+            probeTypeItems = self.createItems(phidgetProbeTypeItems)
+            for item in probeTypeItems:
+                model.appendRow(item)
+            try:
+                probeTypeCombo.setCurrentIndex(self.aw.qmc.phidget1048_types[i-1]-1)
+            except Exception: # pylint: disable=broad-except
+                pass
+
+            probeTypeCombo.setMinimumContentsLength(1)
+            probeTypeCombo.setSizeAdjustPolicy(QComboBox.SizeAdjustPolicy.AdjustToContents) # AdjustToMinimumContentsLengthWithIcon
+            width = probeTypeCombo.minimumSizeHint().width()
+            probeTypeCombo.setMinimumWidth(width)
+            if platform.system() == 'Darwin':
+                probeTypeCombo.setMaximumWidth(width)
+
+            self.probeTypeCombos.append(probeTypeCombo)
+            phidgetBox1048.addWidget(probeTypeCombo,1,i)
+            rowLabel = QLabel(str(i-1))
+            phidgetBox1048.addWidget(rowLabel,0,i)
+
+        self.dataRateCombo1048 = QComboBox()
+        self.dataRateCombo1048.setFocusPolicy(Qt.FocusPolicy.NoFocus)
+        model = cast(QStandardItemModel, self.dataRateCombo1048.model())
+        dataRateItems = self.createItems(self.aw.qmc.phidget_dataRatesStrings)
+        for item in dataRateItems:
+            model.appendRow(item)
+        try:
+            self.dataRateCombo1048.setCurrentIndex(self.aw.qmc.phidget_dataRatesValues.index(self.aw.qmc.phidget1048_dataRate))
+        except Exception: # pylint: disable=broad-except
+            pass
+        self.dataRateCombo1048.setMinimumContentsLength(5)
+        self.dataRateCombo1048.setSizeAdjustPolicy(QComboBox.SizeAdjustPolicy.AdjustToContents) # AdjustToContents
+        width = self.dataRateCombo1048.minimumSizeHint().width()
+        self.dataRateCombo1048.setMinimumWidth(width)
+        if platform.system() == 'Darwin':
+            self.dataRateCombo1048.setMaximumWidth(width)
+
+        phidgetBox1048.addWidget(self.dataRateCombo1048,4,1,1,2)
+        phidgetBox1048.setSpacing(2)
+
+        typeLabel = QLabel(QApplication.translate('Label','Type'))
+        asyncLabel = QLabel(QApplication.translate('Label','Async'))
+        changeTriggerLabel = QLabel(QApplication.translate('Label','Change'))
+        rateLabel = QLabel(QApplication.translate('Label','Rate'))
+        phidgetBox1048.addWidget(typeLabel,1,0,Qt.AlignmentFlag.AlignRight)
+        phidgetBox1048.addWidget(asyncLabel,2,0,Qt.AlignmentFlag.AlignRight)
+        phidgetBox1048.addWidget(changeTriggerLabel,3,0,Qt.AlignmentFlag.AlignRight)
+        phidgetBox1048.addWidget(rateLabel,4,0,Qt.AlignmentFlag.AlignRight)
+        phidget1048HBox = QHBoxLayout()
+        phidget1048HBox.addStretch()
+        phidget1048HBox.addLayout(phidgetBox1048)
+        phidget1048HBox.addStretch()
+        phidget1048VBox = QVBoxLayout()
+        phidget1048VBox.addLayout(phidget1048HBox)
+        phidget1048VBox.addStretch()
+        phidget1048GroupBox = QGroupBox('1048/1051/TMP1100/TMP1101 TC')
+        phidget1048GroupBox.setLayout(phidget1048VBox)
+        phidget1048GroupBox.setContentsMargins(0,0,0,0)
+        phidget1048HBox.setContentsMargins(0,0,0,0)
+        phidget1048VBox.setContentsMargins(0,0,0,0)
+
+        # Phidget IR
+        phidgetBox1045 = QGridLayout()
+        phidgetBox1045.setSpacing(2)
+        self.changeTriggerCombos1045 = QComboBox()
+        self.changeTriggerCombos1045.setFocusPolicy(Qt.FocusPolicy.NoFocus)
+        model = cast(QStandardItemModel, self.changeTriggerCombos1045.model())
+        changeTriggerItems = self.createItems(self.aw.qmc.phidget1045_changeTriggersStrings)
+        for item in changeTriggerItems:
+            model.appendRow(item)
+        try:
+            self.changeTriggerCombos1045.setCurrentIndex(self.aw.qmc.phidget1045_changeTriggersValues.index(self.aw.qmc.phidget1045_changeTrigger))
+        except Exception: # pylint: disable=broad-except
+            pass
+
+        self.changeTriggerCombos1045.setMinimumContentsLength(3)
+        self.changeTriggerCombos1045.setSizeAdjustPolicy(QComboBox.SizeAdjustPolicy.AdjustToContents) # AdjustToMinimumContentsLengthWithIcon
+        width = self.changeTriggerCombos1045.minimumSizeHint().width()
+        self.changeTriggerCombos1045.setMinimumWidth(width)
+        if platform.system() == 'Darwin':
+            self.changeTriggerCombos1045.setMaximumWidth(width)
+
+        phidgetBox1045.addWidget(self.changeTriggerCombos1045,3,1)
+        self.asyncCheckBoxe1045 = QCheckBox()
+        phidgetBox1045.addWidget(self.asyncCheckBoxe1045,2,1)
+        self.asyncCheckBoxe1045.setFocusPolicy(Qt.FocusPolicy.NoFocus)
+        self.asyncCheckBoxe1045.setChecked(True)
+        self.asyncCheckBoxe1045.stateChanged.connect(self.asyncFlagStateChanged1045)
+        self.asyncCheckBoxe1045.setChecked(self.aw.qmc.phidget1045_async)
+        asyncLabel = QLabel(QApplication.translate('Label','Async'))
+        changeTriggerLabel = QLabel(QApplication.translate('Label','Change'))
+        rateLabel = QLabel(QApplication.translate('Label','Rate'))
+
+        self.dataRateCombo1045 = QComboBox()
+        self.dataRateCombo1045.setFocusPolicy(Qt.FocusPolicy.NoFocus)
+        model = cast(QStandardItemModel, self.dataRateCombo1045.model())
+        dataRateItems = self.createItems(self.aw.qmc.phidget_dataRatesStrings)
+        for item in dataRateItems:
+            model.appendRow(item)
+        try:
+            self.dataRateCombo1045.setCurrentIndex(self.aw.qmc.phidget_dataRatesValues.index(self.aw.qmc.phidget1045_dataRate))
+        except Exception: # pylint: disable=broad-except
+            pass
+        self.dataRateCombo1045.setMinimumContentsLength(3)
+        self.dataRateCombo1045.setSizeAdjustPolicy(QComboBox.SizeAdjustPolicy.AdjustToContents) # AdjustToMinimumContentsLengthWithIcon
+        width = self.dataRateCombo1045.minimumSizeHint().width()
+        self.dataRateCombo1045.setMinimumWidth(width)
+        if platform.system() == 'Darwin':
+            self.dataRateCombo1045.setMaximumWidth(width)
+
+        EmissivityLabel = QLabel(QApplication.translate('Label','Emissivity'))
+        self.emissivitySpinBox = MyQDoubleSpinBox()
+        self.emissivitySpinBox.setAlignment(Qt.AlignmentFlag.AlignRight)
+        self.emissivitySpinBox.setRange(0.,1.)
+        self.emissivitySpinBox.setSingleStep(.1)
+        self.emissivitySpinBox.setValue(self.aw.qmc.phidget1045_emissivity)
+
+        phidgetBox1045.addWidget(asyncLabel,2,0,Qt.AlignmentFlag.AlignRight)
+        phidgetBox1045.addWidget(changeTriggerLabel,3,0,Qt.AlignmentFlag.AlignRight)
+        phidgetBox1045.addWidget(rateLabel,4,0,Qt.AlignmentFlag.AlignRight)
+        phidgetBox1045.addWidget(EmissivityLabel,5,0,Qt.AlignmentFlag.AlignRight)
+        phidgetBox1045.addWidget(self.dataRateCombo1045,4,1)
+        phidgetBox1045.addWidget(self.emissivitySpinBox,5,1)
+        phidget1045VBox = QVBoxLayout()
+        phidget1045VBox.addStretch()
+        phidget1045VBox.addLayout(phidgetBox1045)
+        phidget1045VBox.addStretch()
+        phidget1045VBox.addStretch()
+        phidget1045GroupBox = QGroupBox('1045 IR')
+        phidget1045GroupBox.setLayout(phidget1045VBox)
+        phidget1045VBox.setContentsMargins(0,0,0,0)
+
+
+        # 1046 RTD
+        phidgetBox1046 = QGridLayout()
+        phidgetBox1046.setSpacing(2)
+        phidgetBox1046.setContentsMargins(0,0,0,0)
+        self.gainCombos1046 = []
+        self.formulaCombos1046 = []
+        self.asyncCheckBoxes1046 = []
+        for i in range(1,5):
+            gainCombo = QComboBox()
+            gainCombo.setFocusPolicy(Qt.FocusPolicy.NoFocus)
+
+            model = cast(QStandardItemModel, gainCombo.model())
+            gainItems = self.createItems(self.aw.qmc.phidget1046_gainValues)
+            for item in gainItems:
+                model.appendRow(item)
+            try:
+                gainCombo.setCurrentIndex(self.aw.qmc.phidget1046_gain[i-1] - 1)
+            except Exception: # pylint: disable=broad-except
+                pass
+
+            gainCombo.setSizeAdjustPolicy(QComboBox.SizeAdjustPolicy.AdjustToContents) # AdjustToMinimumContentsLengthWithIcon
+            gainCombo.setMinimumContentsLength(1)
+            width = gainCombo.minimumSizeHint().width()
+            gainCombo.setMinimumWidth(width)
+            if platform.system() == 'Darwin':
+                gainCombo.setMaximumWidth(width)
+
+            self.gainCombos1046.append(gainCombo)
+            phidgetBox1046.addWidget(gainCombo,1,i)
+
+            formulaCombo = QComboBox()
+            formulaCombo.setFocusPolicy(Qt.FocusPolicy.NoFocus)
+            model = cast(QStandardItemModel, formulaCombo.model())
+            formulaItems = self.createItems(self.aw.qmc.phidget1046_formulaValues)
+            for item in formulaItems:
+                model.appendRow(item)
+            try:
+                formulaCombo.setCurrentIndex(self.aw.qmc.phidget1046_formula[i-1])
+            except Exception: # pylint: disable=broad-except
+                pass
+
+            formulaCombo.setSizeAdjustPolicy(QComboBox.SizeAdjustPolicy.AdjustToContents) # AdjustToMinimumContentsLengthWithIcon
+            formulaCombo.setMinimumContentsLength(1)
+            width = formulaCombo.minimumSizeHint().width()
+            formulaCombo.setMinimumWidth(width)
+            if platform.system() == 'Darwin':
+                formulaCombo.setMaximumWidth(width)
+
+            self.formulaCombos1046.append(formulaCombo)
+            phidgetBox1046.addWidget(formulaCombo,2,i)
+
+            asyncFlag = QCheckBox()
+            asyncFlag.setFocusPolicy(Qt.FocusPolicy.NoFocus)
+            asyncFlag.setChecked(True)
+            asyncFlag.setChecked(self.aw.qmc.phidget1046_async[i-1])
+            self.asyncCheckBoxes1046.append(asyncFlag)
+            phidgetBox1046.addWidget(asyncFlag,3,i)
+            rowLabel = QLabel(str(i-1))
+            phidgetBox1046.addWidget(rowLabel,0,i)
+
+        self.dataRateCombo1046 = QComboBox()
+        self.dataRateCombo1046.setFocusPolicy(Qt.FocusPolicy.NoFocus)
+        model = cast(QStandardItemModel, self.dataRateCombo1046.model())
+        dataRateItems = self.createItems(self.aw.qmc.phidget_dataRatesStrings)
+        for item in dataRateItems:
+            model.appendRow(item)
+        try:
+            self.dataRateCombo1046.setCurrentIndex(self.aw.qmc.phidget_dataRatesValues.index(self.aw.qmc.phidget1046_dataRate))
+        except Exception: # pylint: disable=broad-except
+            pass
+        self.dataRateCombo1046.setSizeAdjustPolicy(QComboBox.SizeAdjustPolicy.AdjustToContents) # AdjustToMinimumContentsLengthWithIcon
+        self.dataRateCombo1046.setMinimumContentsLength(5)
+        width = self.dataRateCombo1046.minimumSizeHint().width()
+        self.dataRateCombo1046.setMinimumWidth(width)
+        if platform.system() == 'Darwin':
+            self.dataRateCombo1046.setMaximumWidth(width)
+
+        phidgetBox1046.addWidget(self.dataRateCombo1046,4,1,1,2)
+
+
+        gainLabel = QLabel(QApplication.translate('Label','Gain'))
+        formulaLabel = QLabel(QApplication.translate('Label','Wiring'))
+        asyncLabel = QLabel(QApplication.translate('Label','Async'))
+        rateLabel = QLabel(QApplication.translate('Label','Rate'))
+        phidgetBox1046.addWidget(gainLabel,1,0,Qt.AlignmentFlag.AlignRight)
+        phidgetBox1046.addWidget(formulaLabel,2,0,Qt.AlignmentFlag.AlignRight)
+        phidgetBox1046.addWidget(asyncLabel,3,0,Qt.AlignmentFlag.AlignRight)
+        phidgetBox1046.addWidget(rateLabel,4,0,Qt.AlignmentFlag.AlignRight)
+        phidget1046HBox = QHBoxLayout()
+        phidget1046HBox.addStretch()
+        phidget1046HBox.addLayout(phidgetBox1046)
+        phidget1046VBox = QVBoxLayout()
+        phidget1046VBox.addLayout(phidget1046HBox)
+        phidget1046VBox.addStretch()
+        phidget1046GroupBox = QGroupBox('1046 RTD / DAQ1500')
+        phidget1046GroupBox.setLayout(phidget1046VBox)
+        phidget1046GroupBox.setContentsMargins(0,10,0,0)
+        phidget1046HBox.setContentsMargins(0,0,0,0)
+        phidget1046VBox.setContentsMargins(0,0,0,0)
+
+        # TMP1200 RTD
+        phidgetBox1200 = QGridLayout()
+        phidgetBox1200.setSpacing(2)
+        phidgetBox1200_2 = QGridLayout()
+        phidgetBox1200_2.setSpacing(2)
+
+        self.formulaCombo1200 = QComboBox()
+        self.formulaCombo1200.setFocusPolicy(Qt.FocusPolicy.NoFocus)
+        model = cast(QStandardItemModel, self.formulaCombo1200.model())
+        wireItems = self.createItems(self.aw.qmc.phidget1200_formulaValues)
+        for item in wireItems:
+            model.appendRow(item)
+        try:
+            self.formulaCombo1200.setCurrentIndex(self.aw.qmc.phidget1200_formula)
+        except Exception: # pylint: disable=broad-except
+            pass
+        self.formulaCombo1200.setMinimumContentsLength(5)
+        width = self.formulaCombo1200.minimumSizeHint().width()
+        self.formulaCombo1200.setMinimumWidth(width)
+
+        self.wireCombo1200 = QComboBox()
+        self.wireCombo1200.setFocusPolicy(Qt.FocusPolicy.NoFocus)
+        model = cast(QStandardItemModel, self.wireCombo1200.model())
+        wireItems = self.createItems(self.aw.qmc.phidget1200_wireValues)
+        for item in wireItems:
+            model.appendRow(item)
+        try:
+            self.wireCombo1200.setCurrentIndex(self.aw.qmc.phidget1200_wire)
+        except Exception: # pylint: disable=broad-except
+            pass
+        self.wireCombo1200.setMinimumContentsLength(5)
+        width = self.wireCombo1200.minimumSizeHint().width()
+        self.wireCombo1200.setMinimumWidth(width)
+
+        self.asyncCheckBoxe1200 = QCheckBox()
+        self.asyncCheckBoxe1200.setFocusPolicy(Qt.FocusPolicy.NoFocus)
+        self.asyncCheckBoxe1200.setChecked(self.aw.qmc.phidget1200_async)
+        self.asyncCheckBoxe1200.stateChanged.connect(self.asyncFlagStateChanged1200)
+
+        self.changeTriggerCombo1200 = QComboBox()
+        self.changeTriggerCombo1200.setFocusPolicy(Qt.FocusPolicy.NoFocus)
+        model = cast(QStandardItemModel, self.changeTriggerCombo1200.model())
+        changeTriggerItems = self.createItems(self.aw.qmc.phidget1200_changeTriggersStrings)
+        for item in changeTriggerItems:
+            model.appendRow(item)
+        try:
+            self.changeTriggerCombo1200.setCurrentIndex(self.aw.qmc.phidget1200_changeTriggersValues.index(self.aw.qmc.phidget1200_changeTrigger))
+        except Exception: # pylint: disable=broad-except
+            pass
+        self.changeTriggerCombo1200.setMinimumContentsLength(4)
+        width = self.changeTriggerCombo1200.minimumSizeHint().width()
+        self.changeTriggerCombo1200.setMinimumWidth(width)
+        self.changeTriggerCombo1200.setEnabled(self.aw.qmc.phidget1200_async)
+
+        self.rateCombo1200 = QComboBox()
+        self.rateCombo1200.setFocusPolicy(Qt.FocusPolicy.NoFocus)
+        model = cast(QStandardItemModel, self.rateCombo1200.model())
+        dataRateItems = self.createItems(self.aw.qmc.phidget1200_dataRatesStrings)
+        for item in dataRateItems:
+            model.appendRow(item)
+        try:
+            self.rateCombo1200.setCurrentIndex(self.aw.qmc.phidget1200_dataRatesValues.index(self.aw.qmc.phidget1200_dataRate))
+        except Exception: # pylint: disable=broad-except
+            pass
+        self.rateCombo1200.setMinimumContentsLength(3)
+        width = self.rateCombo1200.minimumSizeHint().width()
+        self.rateCombo1200.setMinimumWidth(width)
+
+#---
+        self.formulaCombo1200_2 = QComboBox()
+        self.formulaCombo1200_2.setFocusPolicy(Qt.FocusPolicy.NoFocus)
+        model = cast(QStandardItemModel, self.formulaCombo1200_2.model())
+        wireItems = self.createItems(self.aw.qmc.phidget1200_formulaValues)
+        for item in wireItems:
+            model.appendRow(item)
+        try:
+            self.formulaCombo1200_2.setCurrentIndex(self.aw.qmc.phidget1200_2_formula)
+        except Exception: # pylint: disable=broad-except
+            pass
+        self.formulaCombo1200_2.setMinimumContentsLength(4)
+        width = self.formulaCombo1200_2.minimumSizeHint().width()
+        self.formulaCombo1200_2.setMinimumWidth(width)
+
+        self.wireCombo1200_2 = QComboBox()
+        self.wireCombo1200_2.setFocusPolicy(Qt.FocusPolicy.NoFocus)
+        model = cast(QStandardItemModel, self.wireCombo1200_2.model())
+        wireItems = self.createItems(self.aw.qmc.phidget1200_wireValues)
+        for item in wireItems:
+            model.appendRow(item)
+        try:
+            self.wireCombo1200_2.setCurrentIndex(self.aw.qmc.phidget1200_2_wire)
+        except Exception: # pylint: disable=broad-except
+            pass
+        self.wireCombo1200_2.setMinimumContentsLength(4)
+        width = self.wireCombo1200_2.minimumSizeHint().width()
+        self.wireCombo1200_2.setMinimumWidth(width)
+
+        self.asyncCheckBoxe1200_2 = QCheckBox()
+        self.asyncCheckBoxe1200_2.setFocusPolicy(Qt.FocusPolicy.NoFocus)
+        self.asyncCheckBoxe1200_2.setChecked(self.aw.qmc.phidget1200_2_async)
+        self.asyncCheckBoxe1200_2.stateChanged.connect(self.asyncFlagStateChanged1200_2)
+
+        self.changeTriggerCombo1200_2 = QComboBox()
+        self.changeTriggerCombo1200_2.setFocusPolicy(Qt.FocusPolicy.NoFocus)
+        model = cast(QStandardItemModel, self.changeTriggerCombo1200_2.model())
+        changeTriggerItems = self.createItems(self.aw.qmc.phidget1200_changeTriggersStrings)
+        for item in changeTriggerItems:
+            model.appendRow(item)
+        try:
+            self.changeTriggerCombo1200_2.setCurrentIndex(self.aw.qmc.phidget1200_changeTriggersValues.index(self.aw.qmc.phidget1200_2_changeTrigger))
+        except Exception: # pylint: disable=broad-except
+            pass
+        self.changeTriggerCombo1200_2.setMinimumContentsLength(4)
+        width = self.changeTriggerCombo1200_2.minimumSizeHint().width()
+        self.changeTriggerCombo1200_2.setMinimumWidth(width)
+        self.changeTriggerCombo1200_2.setEnabled(self.aw.qmc.phidget1200_async)
+
+        self.rateCombo1200_2 = QComboBox()
+        self.rateCombo1200_2.setFocusPolicy(Qt.FocusPolicy.NoFocus)
+        model = cast(QStandardItemModel, self.rateCombo1200_2.model())
+        dataRateItems = self.createItems(self.aw.qmc.phidget1200_dataRatesStrings)
+        for item in dataRateItems:
+            model.appendRow(item)
+        try:
+            self.rateCombo1200_2.setCurrentIndex(self.aw.qmc.phidget1200_dataRatesValues.index(self.aw.qmc.phidget1200_2_dataRate))
+        except Exception: # pylint: disable=broad-except
+            pass
+        self.rateCombo1200_2.setMinimumContentsLength(3)
+        width = self.rateCombo1200_2.minimumSizeHint().width()
+        self.rateCombo1200_2.setMinimumWidth(width)
+
+#---
+
+        typeLabel = QLabel(QApplication.translate('Label','Type'))
+        wireLabel = QLabel(QApplication.translate('Label','Wiring'))
+        asyncLabel = QLabel(QApplication.translate('Label','Async'))
+        changeLabel = QLabel(QApplication.translate('Label','Change'))
+        rateLabel = QLabel(QApplication.translate('Label','Rate'))
+
+        typeLabel2 = QLabel(QApplication.translate('Label','Type'))
+        wireLabel2 = QLabel(QApplication.translate('Label','Wiring'))
+        asyncLabel2 = QLabel(QApplication.translate('Label','Async'))
+        changeLabel2 = QLabel(QApplication.translate('Label','Change'))
+        rateLabel2 = QLabel(QApplication.translate('Label','Rate'))
+
+        phidgetBox1200.addWidget(typeLabel,1,0,Qt.AlignmentFlag.AlignRight)
+        phidgetBox1200.addWidget(self.formulaCombo1200,1,1)
+        phidgetBox1200.addWidget(wireLabel,2,0,Qt.AlignmentFlag.AlignRight)
+        phidgetBox1200.addWidget(self.wireCombo1200,2,1)
+        phidgetBox1200.addWidget(asyncLabel,3,0,Qt.AlignmentFlag.AlignRight)
+        phidgetBox1200.addWidget(self.asyncCheckBoxe1200,3,1)
+        phidgetBox1200.addWidget(changeLabel,4,0,Qt.AlignmentFlag.AlignRight)
+        phidgetBox1200.addWidget(self.changeTriggerCombo1200,4,1)
+        phidgetBox1200.addWidget(rateLabel,5,0,Qt.AlignmentFlag.AlignRight)
+        phidgetBox1200.addWidget(self.rateCombo1200,5,1)
+
+        phidgetBox1200_2.addWidget(typeLabel2,1,0,Qt.AlignmentFlag.AlignRight)
+        phidgetBox1200_2.addWidget(self.formulaCombo1200_2,1,1)
+        phidgetBox1200_2.addWidget(wireLabel2,2,0,Qt.AlignmentFlag.AlignRight)
+        phidgetBox1200_2.addWidget(self.wireCombo1200_2,2,1)
+        phidgetBox1200_2.addWidget(asyncLabel2,3,0,Qt.AlignmentFlag.AlignRight)
+        phidgetBox1200_2.addWidget(self.asyncCheckBoxe1200_2,3,1)
+        phidgetBox1200_2.addWidget(changeLabel2,4,0,Qt.AlignmentFlag.AlignRight)
+        phidgetBox1200_2.addWidget(self.changeTriggerCombo1200_2,4,1)
+        phidgetBox1200_2.addWidget(rateLabel2,5,0,Qt.AlignmentFlag.AlignRight)
+        phidgetBox1200_2.addWidget(self.rateCombo1200_2,5,1)
+
+        phidget1200HBox = QHBoxLayout()
+        phidget1200HBox.addStretch()
+        phidget1200HBox.addLayout(phidgetBox1200)
+        phidget1200HBox.addStretch()
+        phidget1200VBox = QVBoxLayout()
+        phidget1200VBox.addLayout(phidget1200HBox)
+        phidget1200VBox.addStretch()
+        phidget1200VBox.setContentsMargins(0,0,0,0)
+        phidget1200HBox.setContentsMargins(0,0,0,0)
+
+        phidget1200HBox_2 = QHBoxLayout()
+        phidget1200HBox_2.addStretch()
+        phidget1200HBox_2.addLayout(phidgetBox1200_2)
+        phidget1200HBox_2.addStretch()
+        phidget1200VBox_2 = QVBoxLayout()
+        phidget1200VBox_2.addLayout(phidget1200HBox_2)
+        phidget1200VBox_2.addStretch()
+        phidget1200VBox_2.setContentsMargins(0,0,0,0)
+        phidget1200HBox_2.setContentsMargins(0,0,0,0)
+
+        phidget1200_tabs = QTabWidget()
+        phidget1200_tab1_widget = QWidget()
+        phidget1200_tab1_widget.setLayout(phidget1200VBox)
+        phidget1200_tabs.addTab(phidget1200_tab1_widget,'A')
+
+        phidget1200_tab2_widget = QWidget()
+        phidget1200_tab2_widget.setLayout(phidget1200VBox_2)
+        phidget1200_tabs.addTab(phidget1200_tab2_widget,'B')
+
+        phidgetGroupBoxLayout = QVBoxLayout()
+        phidgetGroupBoxLayout.addWidget(phidget1200_tabs)
+
+        phidgetGroupBoxLayout.setContentsMargins(0,0,0,0) # left, top, right, bottom
+
+        phidget1200GroupBox = QGroupBox('TMP1200/1202 RTD')
+        phidget1200GroupBox.setLayout(phidgetGroupBoxLayout)
+        phidget1200GroupBox.setContentsMargins(0,2,0,0) # left, top, right, bottom
+
+
+        # DAQ1400 VI
+        powerLabel = QLabel(QApplication.translate('Label','Power'))
+        modeLabel = QLabel(QApplication.translate('Label','Mode'))
+
+        self.powerCombo1400 = QComboBox()
+        self.powerCombo1400.setFocusPolicy(Qt.FocusPolicy.NoFocus)
+        self.powerCombo1400.addItems(self.aw.qmc.phidgetDAQ1400_powerSupplyStrings)
+        self.powerCombo1400.setCurrentIndex(self.aw.qmc.phidgetDAQ1400_powerSupply)
+        self.powerCombo1400.setMinimumContentsLength(3)
+        width = self.powerCombo1400.minimumSizeHint().width()
+        self.powerCombo1400.setMinimumWidth(width)
+
+        self.modeCombo1400 = QComboBox()
+        self.modeCombo1400.setFocusPolicy(Qt.FocusPolicy.NoFocus)
+        self.modeCombo1400.addItems(self.aw.qmc.phidgetDAQ1400_inputModeStrings)
+        self.modeCombo1400.setCurrentIndex(self.aw.qmc.phidgetDAQ1400_inputMode)
+        self.modeCombo1400.setMinimumContentsLength(3)
+        width = self.modeCombo1400.minimumSizeHint().width()
+        self.modeCombo1400.setMinimumWidth(width)
+
+        phidgetBox1400 = QGridLayout()
+        phidgetBox1400.setSpacing(2)
+        phidgetBox1400.setContentsMargins(0,0,0,0)
+        phidgetBox1400.addWidget(powerLabel,0,0,Qt.AlignmentFlag.AlignRight)
+        phidgetBox1400.addWidget(self.powerCombo1400,0,1)
+        phidgetBox1400.addWidget(modeLabel,1,0,Qt.AlignmentFlag.AlignRight)
+        phidgetBox1400.addWidget(self.modeCombo1400,1,1)
+
+        phidget1400HBox = QHBoxLayout()
+        phidget1400HBox.addLayout(phidgetBox1400)
+        phidget1400VBox = QVBoxLayout()
+        phidget1400VBox.addLayout(phidget1400HBox)
+        phidget1400VBox.addStretch()
+
+        phidget1400GroupBox = QGroupBox('DAQ1400 VI')
+        phidget1400GroupBox.setLayout(phidget1400VBox)
+        phidget1400GroupBox.setContentsMargins(0,0,0,0)
+        phidget1400VBox.setContentsMargins(0,0,0,0)
+        phidget1400HBox.setContentsMargins(0,0,0,0)
+
+        phdget10481045GroupBoxHBox = QHBoxLayout()
+        phdget10481045GroupBoxHBox.addWidget(phidget1048GroupBox)
+        phdget10481045GroupBoxHBox.addStretch()
+        phdget10481045GroupBoxHBox.addWidget(phidget1200GroupBox)
+        phdget10481045GroupBoxHBox.addStretch()
+        phdget10481045GroupBoxHBox.addWidget(phidget1400GroupBox)
+        phdget10481045GroupBoxHBox.addStretch()
+        phdget10481045GroupBoxHBox.addWidget(phidget1046GroupBox)
+        phdget10481045GroupBoxHBox.setContentsMargins(2,0,0,0) # left, top, right, bottom
+        phdget10481045GroupBoxHBox.setSpacing(2)
+
+
+        # Phidget IO 1018
+        # per each of the 8-channels: raw flag / data rate popup / change trigger popup
+        phidgetBox1018 = QGridLayout()
+        phidgetBox1018.setSpacing(2)
+        self.asyncCheckBoxes = []
+        self.ratioCheckBoxes = []
+        self.dataRateCombos = []
+        self.changeTriggerCombos = []
+        self.voltageRangeCombos = []
+        for i in range(1,9):
+            dataRatesCombo = QComboBox()
+            dataRatesCombo.setFocusPolicy(Qt.FocusPolicy.NoFocus)
+            model = cast(QStandardItemModel, dataRatesCombo.model())
+            dataRateItems = self.createItems(self.aw.qmc.phidget_dataRatesStrings)
+            for item in dataRateItems:
+                model.appendRow(item)
+            try:
+                dataRatesCombo.setCurrentIndex(self.aw.qmc.phidget_dataRatesValues.index(self.aw.qmc.phidget1018_dataRates[i-1]))
+            except Exception: # pylint: disable=broad-except
+                pass
+            dataRatesCombo.setSizeAdjustPolicy(QComboBox.SizeAdjustPolicy.AdjustToContents) # AdjustToMinimumContentsLengthWithIcon
+            dataRatesCombo.setMinimumContentsLength(4)
+            width = dataRatesCombo.minimumSizeHint().width()
+            dataRatesCombo.setMinimumWidth(width)
+            if platform.system() == 'Darwin':
+                dataRatesCombo.setMaximumWidth(width)
+            self.dataRateCombos.append(dataRatesCombo)
+            phidgetBox1018.addWidget(dataRatesCombo,4,i)
+
+            changeTriggersCombo = QComboBox()
+            changeTriggersCombo.setFocusPolicy(Qt.FocusPolicy.NoFocus)
+            changeTriggersCombo.setEnabled(bool(self.aw.qmc.phidget1018_async[i-1]))
+            model = cast(QStandardItemModel, changeTriggersCombo.model())
+            changeTriggerItems = self.createItems(self.aw.qmc.phidget1018_changeTriggersStrings)
+            for item in changeTriggerItems:
+                model.appendRow(item)
+            try:
+                changeTriggersCombo.setCurrentIndex(self.aw.qmc.phidget1018_changeTriggersValues.index(self.aw.qmc.phidget1018_changeTriggers[i-1]))
+            except Exception: # pylint: disable=broad-except
+                pass
+            changeTriggersCombo.setMinimumContentsLength(4)
+            changeTriggersCombo.setSizeAdjustPolicy(QComboBox.SizeAdjustPolicy.AdjustToContents) # AdjustToMinimumContentsLengthWithIcon
+            width = changeTriggersCombo.minimumSizeHint().width()
+            changeTriggersCombo.setMinimumWidth(width)
+            if platform.system() == 'Darwin':
+                changeTriggersCombo.setMaximumWidth(width)
+            self.changeTriggerCombos.append(changeTriggersCombo)
+            phidgetBox1018.addWidget(changeTriggersCombo,3,i)
+
+            voltageRangeCombo = QComboBox()
+            voltageRangeCombo.setFocusPolicy(Qt.FocusPolicy.NoFocus)
+            model = cast(QStandardItemModel, voltageRangeCombo.model())
+            voltageRangeItems = self.createItems(self.aw.qmc.phidgetVCP100x_voltageRangeStrings)
+            for item in voltageRangeItems:
+                model.appendRow(item)
+            try:
+                voltageRangeCombo.setCurrentIndex(self.aw.qmc.phidgetVCP100x_voltageRangeValues.index(self.aw.qmc.phidgetVCP100x_voltageRanges[i-1]))
+            except Exception: # pylint: disable=broad-except
+                pass
+            voltageRangeCombo.setMinimumContentsLength(4)
+            voltageRangeCombo.setSizeAdjustPolicy(QComboBox.SizeAdjustPolicy.AdjustToContents) # AdjustToMinimumContentsLengthWithIcon
+            width = voltageRangeCombo.minimumSizeHint().width()
+            voltageRangeCombo.setMinimumWidth(width)
+            if platform.system() == 'Darwin':
+                voltageRangeCombo.setMaximumWidth(width)
+            self.voltageRangeCombos.append(voltageRangeCombo)
+            phidgetBox1018.addWidget(voltageRangeCombo,5,i)
+
+
+            asyncFlag = QCheckBox()
+            self.asyncCheckBoxes.append(asyncFlag)
+            asyncFlag.setFocusPolicy(Qt.FocusPolicy.NoFocus)
+            asyncFlag.setChecked(True)
+            asyncFlag.stateChanged.connect(self.asyncFlagStateChanged)
+            asyncFlag.setChecked(self.aw.qmc.phidget1018_async[i-1])
+            phidgetBox1018.addWidget(asyncFlag,2,i)
+
+            ratioFlag = QCheckBox()
+            ratioFlag.setFocusPolicy(Qt.FocusPolicy.NoFocus)
+            ratioFlag.setChecked(False)
+            ratioFlag.setChecked(self.aw.qmc.phidget1018_ratio[i-1])
+            self.ratioCheckBoxes.append(ratioFlag)
+            phidgetBox1018.addWidget(ratioFlag,6,i)
+
+            rowLabel = QLabel(str(i-1))
+            phidgetBox1018.addWidget(rowLabel,0,i)
+
+        asyncLabel = QLabel(QApplication.translate('Label','Async'))
+        dataRateLabel = QLabel(QApplication.translate('Label','Rate'))
+        changeTriggerLabel = QLabel(QApplication.translate('Label','Change'))
+        ratioLabel = QLabel(QApplication.translate('Label','Ratio'))
+        rangeLabel = QLabel(QApplication.translate('Label','Range'))
+        phidgetBox1018.addWidget(asyncLabel,2,0,Qt.AlignmentFlag.AlignRight)
+        phidgetBox1018.addWidget(changeTriggerLabel,3,0,Qt.AlignmentFlag.AlignRight)
+        phidgetBox1018.addWidget(dataRateLabel,4,0,Qt.AlignmentFlag.AlignRight)
+        phidgetBox1018.addWidget(rangeLabel,5,0,Qt.AlignmentFlag.AlignRight)
+        phidgetBox1018.addWidget(ratioLabel,6,0,Qt.AlignmentFlag.AlignRight)
+        phidget1018HBox = QVBoxLayout()
+        phidget1018HBox.addLayout(phidgetBox1018)
+        phidget1018GroupBox = QGroupBox('1010/1011/1013/1018/1019/HUB0000/SBC/DAQxxxx/VCP100x IO')
+        phidget1018GroupBox.setLayout(phidget1018HBox)
+        phidget1018HBox.setContentsMargins(0,0,0,0)
+        self.phidgetBoxRemoteFlag = QCheckBox()
+        self.phidgetBoxRemoteFlag.setFocusPolicy(Qt.FocusPolicy.NoFocus)
+        self.phidgetBoxRemoteFlag.setChecked(self.aw.qmc.phidgetRemoteFlag)
+        self.phidgetBoxRemoteFlag.stateChanged.connect(self.phidgetRemoteStateChanged)
+        phidgetServerIdLabel = QLabel(QApplication.translate('Label','Host'))
+        self.phidgetServerId = QLineEdit(self.aw.qmc.phidgetServerID)
+        self.phidgetServerId.textChanged.connect(self.phidgetHostChanged)
+        self.phidgetServerId.setMinimumWidth(200)
+        self.phidgetServerId.setEnabled(self.aw.qmc.phidgetRemoteFlag)
+        phidgetPasswordLabel = QLabel(QApplication.translate('Label','Password'))
+        self.phidgetPassword = QLineEdit(self.aw.qmc.phidgetPassword)
+        self.phidgetPassword.setEchoMode(QLineEdit.EchoMode.PasswordEchoOnEdit)
+        self.phidgetPassword.setEnabled(self.aw.qmc.phidgetServerID != '')
+        self.phidgetPassword.setMinimumWidth(100)
+        self.phidgetPassword.setEnabled(self.aw.qmc.phidgetRemoteFlag)
+        self.phidgetPassword.setToolTip(QApplication.translate('Tooltip','Phidget server password'))
+        phidgetPortLabel = QLabel(QApplication.translate('Label','Port'))
+        self.phidgetPort = QLineEdit(str(self.aw.qmc.phidgetPort))
+        self.phidgetPort.setMaximumWidth(70)
+        self.phidgetPort.setEnabled(self.aw.qmc.phidgetRemoteFlag)
+        self.phidgetBoxRemoteOnlyFlag = QCheckBox(QApplication.translate('Label','Remote Only'))
+        self.phidgetBoxRemoteOnlyFlag.setFocusPolicy(Qt.FocusPolicy.NoFocus)
+        self.phidgetBoxRemoteOnlyFlag.setChecked(self.aw.qmc.phidgetRemoteOnlyFlag)
+        self.phidgetBoxRemoteOnlyFlag.setEnabled(self.aw.qmc.phidgetRemoteFlag)
+        phidgetServerBox = QHBoxLayout()
+        phidgetServerBox.addWidget(phidgetServerIdLabel)
+        phidgetServerBox.addWidget(self.phidgetServerId)
+        phidgetServerBox.setContentsMargins(0,0,0,0)
+        phidgetServerBox.setSpacing(3)
+        phidgetPasswordBox = QHBoxLayout()
+        phidgetPasswordBox.addWidget(phidgetPasswordLabel)
+        phidgetPasswordBox.addWidget(self.phidgetPassword)
+        phidgetPasswordBox.setContentsMargins(0,0,0,0)
+        phidgetPasswordBox.setSpacing(3)
+        phidgetPortBox = QHBoxLayout()
+        phidgetPortBox.addWidget(phidgetPortLabel)
+        phidgetPortBox.addWidget(self.phidgetPort)
+        phidgetPortBox.setContentsMargins(0,0,0,0)
+        phidgetPortBox.setSpacing(3)
+        phidgetNetworkGrid = QHBoxLayout()
+        phidgetNetworkGrid.addWidget(self.phidgetBoxRemoteFlag)
+        phidgetNetworkGrid.addStretch()
+        phidgetNetworkGrid.addLayout(phidgetServerBox)
+        phidgetNetworkGrid.addLayout(phidgetPortBox)
+        phidgetNetworkGrid.addStretch()
+        phidgetNetworkGrid.addLayout(phidgetPasswordBox)
+        phidgetNetworkGrid.addStretch()
+        phidgetNetworkGrid.addWidget(self.phidgetBoxRemoteOnlyFlag)
+        phidgetNetworkGrid.setContentsMargins(0,0,0,0)
+        phidgetNetworkGrid.setSpacing(20)
+        phidgetNetworkGroupBox = QGroupBox(QApplication.translate('GroupBox','Network'))
+        phidgetNetworkGroupBox.setLayout(phidgetNetworkGrid)
+        phidget10451018HBox = QHBoxLayout()
+        phidget10451018HBox.addWidget(phidget1045GroupBox)
+        phidget10451018HBox.addStretch()
+        phidget10451018HBox.addWidget(phidget1018GroupBox)
+        phidget10451018HBox.setSpacing(2)
+        phidgetVBox = QVBoxLayout()
+        phidgetVBox.addLayout(phdget10481045GroupBoxHBox)
+        phidgetVBox.addLayout(phidget10451018HBox)
+        phidgetVBox.addWidget(phidgetNetworkGroupBox)
+        phidgetVBox.addStretch()
+        phidgetVBox.setSpacing(5)
+        phidgetVBox.setContentsMargins(0,0,0,0)
+        # yoctopuce widgets
+        self.yoctoBoxRemoteFlag = QCheckBox()
+        self.yoctoBoxRemoteFlag.setFocusPolicy(Qt.FocusPolicy.NoFocus)
+        self.yoctoBoxRemoteFlag.setChecked(self.aw.qmc.yoctoRemoteFlag)
+        self.yoctoBoxRemoteFlag.stateChanged.connect(self.yoctoBoxRemoteFlagStateChanged)
+        yoctoServerIdLabel = QLabel(QApplication.translate('Label','VirtualHub'))
+        self.yoctoServerId = QLineEdit(self.aw.qmc.yoctoServerID)
+        self.yoctoServerId.setToolTip(QApplication.translate('Tooltip','Network IP address or name of the remote VirtualHub'))
+        self.yoctoServerId.setAlignment(Qt.AlignmentFlag.AlignRight)
+        self.yoctoServerId.setMinimumWidth(100)
+        self.yoctoServerId.setSizePolicy(QSizePolicy.Policy.Minimum, QSizePolicy.Policy.Minimum)
+        self.yoctoServerId.setEnabled(self.aw.qmc.yoctoRemoteFlag)
+        YoctoEmissivityLabel = QLabel(QApplication.translate('Label','Emissivity'))
+        self.yoctoEmissivitySpinBox = MyQDoubleSpinBox()
+        self.yoctoEmissivitySpinBox.setAlignment(Qt.AlignmentFlag.AlignRight)
+        self.yoctoEmissivitySpinBox.setRange(0.,1.)
+        self.yoctoEmissivitySpinBox.setSingleStep(.1)
+        self.yoctoEmissivitySpinBox.setValue(self.aw.qmc.YOCTO_emissivity)
+        yoctoServerBox = QHBoxLayout()
+        yoctoServerBox.addWidget(yoctoServerIdLabel)
+        yoctoServerBox.addSpacing(10)
+        yoctoServerBox.addWidget(self.yoctoServerId)
+        yoctoServerBox.addStretch()
+        yoctoServerBox.setContentsMargins(0,0,0,0)
+        yoctoServerBox.setSpacing(10)
+        yoctoNetworkGrid = QGridLayout()
+        yoctoNetworkGrid.addWidget(self.yoctoBoxRemoteFlag,0,0)
+        yoctoNetworkGrid.addLayout(yoctoServerBox,0,1)
+        yoctoNetworkGrid.setSpacing(20)
+        yoctoNetworkGroupBox = QGroupBox(QApplication.translate('GroupBox','Network'))
+        yoctoNetworkGroupBox.setLayout(yoctoNetworkGrid)
+        yoctoIRGrid = QGridLayout()
+        yoctoIRGrid.addWidget(YoctoEmissivityLabel,0,0)
+        yoctoIRGrid.addWidget(self.yoctoEmissivitySpinBox,0,1)
+        yoctoIRHorizontalLayout = QHBoxLayout()
+        yoctoIRHorizontalLayout.addLayout(yoctoIRGrid)
+        yoctoIRHorizontalLayout.addStretch()
+        self.yoctoDataRateCombo = QComboBox()
+        self.yoctoDataRateCombo.setFocusPolicy(Qt.FocusPolicy.NoFocus)
+        model = cast(QStandardItemModel, self.yoctoDataRateCombo.model())
+        dataRateItems = self.createItems(self.aw.qmc.YOCTO_dataRatesStrings)
+        for item in dataRateItems:
+            model.appendRow(item)
+        try:
+            self.yoctoDataRateCombo.setCurrentIndex(self.aw.qmc.YOCTO_dataRatesValues.index(self.aw.qmc.YOCTO_dataRate))
+        except Exception: # pylint: disable=broad-except
+            pass
+        self.yoctoDataRateCombo.setSizeAdjustPolicy(QComboBox.SizeAdjustPolicy.AdjustToContents) # AdjustToMinimumContentsLengthWithIcon
+        self.yoctoDataRateCombo.setMinimumContentsLength(5)
+        width = self.yoctoDataRateCombo.minimumSizeHint().width()
+        self.yoctoDataRateCombo.setMinimumWidth(width)
+        self.yoctoAyncChanFlag = QCheckBox()
+        self.yoctoAyncChanFlag.setFocusPolicy(Qt.FocusPolicy.NoFocus)
+        self.yoctoAyncChanFlag.setChecked(self.aw.qmc.YOCTO_async[0]) # only one flag for both channels, as running on async and the other sync will disturbe the readings
+        yoctoAsyncGrid = QGridLayout()
+        yoctoAsyncGrid.addWidget(self.yoctoAyncChanFlag,0,0)
+        yoctoAsyncGrid.addWidget(self.yoctoDataRateCombo,0,1)
+        yoctoAsyncHorizontalLayout = QHBoxLayout()
+        yoctoAsyncHorizontalLayout.addLayout(yoctoAsyncGrid)
+        yoctoAsyncHorizontalLayout.addStretch()
+        yoctoAsyncGroupBox = QGroupBox(QApplication.translate('GroupBox','Async'))
+        yoctoAsyncGroupBox.setLayout(yoctoAsyncHorizontalLayout)
+        yoctoIRGroupBox = QGroupBox(QApplication.translate('GroupBox','IR'))
+        yoctoIRGroupBox.setLayout(yoctoIRHorizontalLayout)
+        yoctoVBox = QVBoxLayout()
+        yoctoVBox.addWidget(yoctoNetworkGroupBox)
+        yoctoVBox.addWidget(yoctoIRGroupBox)
+        yoctoVBox.addWidget(yoctoAsyncGroupBox)
+        yoctoVBox.addStretch()
+        yoctoVBox.setSpacing(5)
+        yoctoVBox.setContentsMargins(0,0,0,0)
 
         # Ambient Widgets and Layouts
 
@@ -196,12 +1002,36 @@ class DeviceAssignmentDlg(ArtisanResizeablDialog):
         # Ambient Temperature Source Selector (generic ET/BT/extra sources; Kaleido AT via extras)
         self.ambientTempComboBox = QComboBox()
         self.ambientTempComboBox.currentIndexChanged.connect(self.ambientTempComboBoxIndexChanged)
+        self.temperatureDeviceCombo = QComboBox()
+        self.temperatureDeviceCombo.setFocusPolicy(Qt.FocusPolicy.NoFocus)
+        self.temperatureDeviceCombo.addItems(self.aw.qmc.temperaturedevicefunctionlist)
+        self.temperatureDeviceCombo.currentIndexChanged.connect(self.temperatureDeviceComboBoxIndexChanged)
+        try:
+            self.temperatureDeviceCombo.setCurrentIndex(self.aw.qmc.ambient_temperature_device)
+        except Exception: # pylint: disable=broad-except
+            pass
 
         self.ambientHumidityComboBox = QComboBox()
         self.ambientHumidityComboBox.currentIndexChanged.connect(self.ambientHumidityComboBoxIndexChanged)
+        self.humidityDeviceCombo = QComboBox()
+        self.humidityDeviceCombo.setFocusPolicy(Qt.FocusPolicy.NoFocus)
+        self.humidityDeviceCombo.addItems(self.aw.qmc.humiditydevicefunctionlist)
+        self.humidityDeviceCombo.currentIndexChanged.connect(self.humidityDeviceComboBoxIndexChanged)
+        try:
+            self.humidityDeviceCombo.setCurrentIndex(self.aw.qmc.ambient_humidity_device)
+        except Exception: # pylint: disable=broad-except
+            pass
 
         self.ambientPressureComboBox = QComboBox()
         self.ambientPressureComboBox.currentIndexChanged.connect(self.ambientPressureComboBoxIndexChanged)
+        self.pressureDeviceCombo = QComboBox()
+        self.pressureDeviceCombo.setFocusPolicy(Qt.FocusPolicy.NoFocus)
+        self.pressureDeviceCombo.addItems(self.aw.qmc.pressuredevicefunctionlist)
+        self.pressureDeviceCombo.currentIndexChanged.connect(self.pressureDeviceComboBoxIndexChanged)
+        try:
+            self.pressureDeviceCombo.setCurrentIndex(self.aw.qmc.ambient_pressure_device)
+        except Exception: # pylint: disable=broad-except
+            pass
 
         self.updateAmbientSourceComboBoxes()
 
@@ -216,13 +1046,16 @@ class DeviceAssignmentDlg(ArtisanResizeablDialog):
         pressureDeviceLabel = QLabel(QApplication.translate('Label','Pressure'))
         elevationLabel = QLabel(QApplication.translate('Label','Elevation'))
         ambientGrid = QGridLayout()
-        ambientGrid.addWidget(ambientSourceLabel,0,1)
+        ambientGrid.addWidget(ambientSourceLabel,0,2)
         ambientGrid.addWidget(temperatureDeviceLabel,1,0)
-        ambientGrid.addWidget(self.ambientTempComboBox,1,1)
+        ambientGrid.addWidget(self.temperatureDeviceCombo,1,1)
+        ambientGrid.addWidget(self.ambientTempComboBox,1,2)
         ambientGrid.addWidget(humidityDeviceLabel,2,0)
-        ambientGrid.addWidget(self.ambientHumidityComboBox,2,1)
+        ambientGrid.addWidget(self.humidityDeviceCombo,2,1)
+        ambientGrid.addWidget(self.ambientHumidityComboBox,2,2)
         ambientGrid.addWidget(pressureDeviceLabel,3,0)
-        ambientGrid.addWidget(self.ambientPressureComboBox,3,1)
+        ambientGrid.addWidget(self.pressureDeviceCombo,3,1)
+        ambientGrid.addWidget(self.ambientPressureComboBox,3,2)
         ambientGrid.addWidget(elevationLabel,4,0)
         ambientGrid.addWidget(self.elevationSpinBox,4,1)
         ambientHBox = QHBoxLayout()
@@ -365,6 +1198,36 @@ class DeviceAssignmentDlg(ArtisanResizeablDialog):
         adjustmentsLayout.addStretch()
 
         adjustmentsLayout.addLayout(adjustmentHelp)
+        # create arduino box
+        filtgrid = QGridLayout()
+        for i in range(4):
+            filtgrid.addWidget(self.FILTspinBoxes[i],1,i+2)
+        filtgridBox = QHBoxLayout()
+        filtgridBox.addLayout(filtgrid)
+        filtgridBox.addStretch()
+        filtgridBox.setContentsMargins(5,5,5,5)
+        arduinogrid = QGridLayout()
+        arduinogrid.addWidget(arduinoETLabel,1,0,Qt.AlignmentFlag.AlignRight)
+        arduinogrid.addWidget(self.arduinoETComboBox,1,1)
+        arduinogrid.addWidget(arduinoBTLabel,2,0,Qt.AlignmentFlag.AlignRight)
+        arduinogrid.addWidget(self.arduinoBTComboBox,2,1)
+        arduinogrid.addWidget(self.arduinoATComboBox,2,3)
+        arduinogrid.addWidget(arduinoATLabel,2,4)
+        arduinogrid.addWidget(self.showControlButton,2,5)
+        arduinogrid.addWidget(FILTLabel,1,3,Qt.AlignmentFlag.AlignRight)
+        arduinogrid.addLayout(filtgridBox,1,4,1,2)
+        arduinogridBox = QHBoxLayout()
+        arduinogridBox.addLayout(arduinogrid)
+        arduinogridBox.addStretch()
+        arduinogridBox.setContentsMargins(5,5,5,5)
+        arduinoBox = QVBoxLayout()
+        arduinoBox.addLayout(arduinogridBox)
+        arduinoBox.setContentsMargins(5,5,5,5)
+        arduinoGroupBox = QGroupBox(QApplication.translate('GroupBox','Arduino TC4'))
+        arduinoGroupBox.setLayout(arduinoBox)
+        arduinoBox.setContentsMargins(0,0,0,0)
+        arduinoGroupBox.setContentsMargins(0,12,0,0)
+
         adjustmentGroupBox.setLayout(adjustmentsLayout)
         #LAYOUT TAB 1
         deviceSubSelector = QHBoxLayout()
@@ -390,6 +1253,7 @@ class DeviceAssignmentDlg(ArtisanResizeablDialog):
         buttonLayout.setSpacing(10)
         tab1Layout = QVBoxLayout()
         tab1Layout.addLayout(grid)
+        tab1Layout.addWidget(arduinoGroupBox)
         tab1Layout.addWidget(self.kaleidoControlGroupBox)
         tab1Layout.setContentsMargins(5,5,5,5)
         tab1Layout.addStretch()
@@ -415,6 +1279,15 @@ class DeviceAssignmentDlg(ArtisanResizeablDialog):
         tab3Layout = QVBoxLayout()
         tab3Layout.addWidget(adjustmentGroupBox)
         tab3Layout.setContentsMargins(2,10,2,5)
+        #LAYOUT TAB 4 (Phidgets)
+        tab4Layout = QVBoxLayout()
+        tab4Layout.addLayout(phidgetVBox)
+        tab4Layout.setContentsMargins(2,10,2,5)
+        tab4Layout.setSpacing(3)
+        #LAYOUT TAB 5 (Yoctopuce)
+        tab5Layout = QVBoxLayout()
+        tab5Layout.addLayout(yoctoVBox)
+        tab5Layout.setContentsMargins(2,10,2,5)
         #LAYOUT TAB 6 (Ambient)
         tab6Layout = QVBoxLayout()
         tab6Layout.addLayout(ambientVBox)
@@ -436,6 +1309,12 @@ class DeviceAssignmentDlg(ArtisanResizeablDialog):
         C3Widget = QWidget()
         C3Widget.setLayout(tab3Layout)
         self.TabWidget.addTab(C3Widget,QApplication.translate('Tab','Symb ET/BT'))
+        C4Widget = QWidget()
+        C4Widget.setLayout(tab4Layout)
+        self.TabWidget.addTab(C4Widget,'Phidgets')
+        C5Widget = QWidget()
+        C5Widget.setLayout(tab5Layout)
+        self.TabWidget.addTab(C5Widget,'Yoctopuce')
         C6Widget = QWidget()
         C6Widget.setLayout(tab6Layout)
         self.TabWidget.addTab(C6Widget,QApplication.translate('Tab','Ambient'))
@@ -466,6 +1345,97 @@ class DeviceAssignmentDlg(ArtisanResizeablDialog):
         # we set the active tab with a QTimer after the tabbar has been rendered once, as otherwise
         # some tabs are not rendered at all on Windows using Qt v6.5.1 (https://bugreports.qt.io/projects/QTBUG/issues/QTBUG-114204?filter=allissues)
         QTimer.singleShot(50, self.setActiveTab)
+
+
+    @pyqtSlot(int)
+    def temperatureDeviceComboBoxIndexChanged(self, i:int) -> None:
+        self.ambientTempComboBox.setEnabled(i == 0)
+
+    @pyqtSlot(int)
+    def humidityDeviceComboBoxIndexChanged(self, i:int) -> None:
+        self.ambientHumidityComboBox.setEnabled(i == 0)
+
+    @pyqtSlot(int)
+    def pressureDeviceComboBoxIndexChanged(self, i:int) -> None:
+        self.ambientPressureComboBox.setEnabled(i == 0)
+
+    @pyqtSlot(int)
+    def yoctoBoxRemoteFlagStateChanged(self, _:int) -> None:
+        self.aw.qmc.yoctoRemoteFlag = not self.aw.qmc.yoctoRemoteFlag
+        self.yoctoServerId.setEnabled(self.aw.qmc.yoctoRemoteFlag)
+
+    @pyqtSlot(int)
+    def phidgetRemoteStateChanged(self, _:int) -> None:
+        self.aw.qmc.phidgetRemoteFlag = not self.aw.qmc.phidgetRemoteFlag
+        self.phidgetServerId.setEnabled(self.aw.qmc.phidgetRemoteFlag)
+        self.phidgetPassword.setEnabled(self.aw.qmc.phidgetRemoteFlag)
+        self.phidgetPort.setEnabled(self.aw.qmc.phidgetRemoteFlag)
+        self.phidgetBoxRemoteOnlyFlag.setEnabled(self.aw.qmc.phidgetRemoteFlag)
+
+    @pyqtSlot(str)
+    def phidgetHostChanged(self, s:str) -> None:
+        self.phidgetPassword.setEnabled(s != '')
+
+    @pyqtSlot(int)
+    def asyncFlagStateChanged1048(self, x:int) -> None:
+        try:
+            sender = cast(QCheckBox, self.sender())
+            i = self.asyncCheckBoxes1048.index(sender)
+            if x == 0:
+                self.changeTriggerCombos1048[i].setEnabled(False)
+            else:
+                self.changeTriggerCombos1048[i].setEnabled(True)
+        except Exception as e: # pylint: disable=broad-except
+            _log.exception(e)
+
+    @pyqtSlot(int)
+    def asyncFlagStateChanged1045(self, x:int) -> None:
+        if x == 0:
+            self.changeTriggerCombos1045.setEnabled(False)
+        else:
+            self.changeTriggerCombos1045.setEnabled(True)
+
+    @pyqtSlot(int)
+    def asyncFlagStateChanged1200(self, x:int) -> None:
+        if x == 0:
+            self.changeTriggerCombo1200.setEnabled(False)
+        else:
+            self.changeTriggerCombo1200.setEnabled(True)
+
+    @pyqtSlot(int)
+    def asyncFlagStateChanged1200_2(self, x:int) -> None:
+        if x == 0:
+            self.changeTriggerCombo1200_2.setEnabled(False)
+        else:
+            self.changeTriggerCombo1200_2.setEnabled(True)
+
+    @pyqtSlot(int)
+    def asyncFlagStateChanged(self, x:int) -> None:
+        try:
+            sender = cast(QCheckBox, self.sender())
+            i = self.asyncCheckBoxes.index(sender)
+            if x == 0:
+                self.changeTriggerCombos[i].setEnabled(False)
+            else:
+                self.changeTriggerCombos[i].setEnabled(True)
+        except Exception as e: # pylint: disable=broad-except
+            _log.exception(e)
+
+    @staticmethod
+    def createItems(strs:list[str]) -> list[QStandardItem]:
+        items:list[QStandardItem] = []
+        for st in strs:
+            item = QStandardItem(st)
+            items.append(item)
+        return items
+
+    @pyqtSlot(int)
+    def PIDfirmwareToggle(self, i:int) -> None:
+        if i:
+            self.aw.qmc.PIDbuttonflag = True
+        else:
+            self.aw.qmc.PIDbuttonflag = False
+        self.aw.showControlButton()
 
     @pyqtSlot(int)
     def ambientTempComboBoxIndexChanged(self, i:int) -> None:
@@ -951,6 +1921,10 @@ class DeviceAssignmentDlg(ArtisanResizeablDialog):
             self.createDeviceTable()
             self.enableDisableAddDeleteButtons()
             self.aw.qmc.resetlinecountcaches()
+            self.aw.ser.arduinoETChannel = str(self.arduinoETComboBox.currentText())
+            self.aw.ser.arduinoBTChannel = str(self.arduinoBTComboBox.currentText())
+            self.aw.ser.arduinoATChannel = str(self.arduinoATComboBox.currentText())
+            self.aw.ser.ArduinoFILT = [sb.value() for sb in self.FILTspinBoxes]
             self.aw.qmc.redraw(recomputeAllDeltas=False)
         except Exception as e: # pylint: disable=broad-except
             _t, _e, exc_tb = sys.exc_info()
@@ -1066,6 +2040,10 @@ class DeviceAssignmentDlg(ArtisanResizeablDialog):
                 self.aw.extraser.pop(x)
             self.createDeviceTable()
             self.aw.qmc.resetlinecountcaches()
+            self.aw.ser.arduinoETChannel = str(self.arduinoETComboBox.currentText())
+            self.aw.ser.arduinoBTChannel = str(self.arduinoBTComboBox.currentText())
+            self.aw.ser.arduinoATChannel = str(self.arduinoATComboBox.currentText())
+            self.aw.ser.ArduinoFILT = [sb.value() for sb in self.FILTspinBoxes]
             self.aw.qmc.redraw(recomputeAllDeltas=False)
         except Exception as ex: # pylint: disable=broad-except
             _t, _e, exc_tb = sys.exc_info()
@@ -1182,6 +2160,10 @@ class DeviceAssignmentDlg(ArtisanResizeablDialog):
         if r is not None:
             self.aw.extraCurveVisibility1[r] = bool(x)
             self.aw.qmc.resetlinecountcaches()
+            self.aw.ser.arduinoETChannel = str(self.arduinoETComboBox.currentText())
+            self.aw.ser.arduinoBTChannel = str(self.arduinoBTComboBox.currentText())
+            self.aw.ser.arduinoATChannel = str(self.arduinoATComboBox.currentText())
+            self.aw.ser.ArduinoFILT = [sb.value() for sb in self.FILTspinBoxes]
 
     @pyqtSlot(int)
     def updateCurveVisibility2(self, x:int) -> None:
@@ -1189,6 +2171,10 @@ class DeviceAssignmentDlg(ArtisanResizeablDialog):
         if r is not None:
             self.aw.extraCurveVisibility2[r] = bool(x)
             self.aw.qmc.resetlinecountcaches()
+            self.aw.ser.arduinoETChannel = str(self.arduinoETComboBox.currentText())
+            self.aw.ser.arduinoBTChannel = str(self.arduinoBTComboBox.currentText())
+            self.aw.ser.arduinoATChannel = str(self.arduinoATComboBox.currentText())
+            self.aw.ser.ArduinoFILT = [sb.value() for sb in self.FILTspinBoxes]
 
     @pyqtSlot(int)
     def updateDelta1(self, x:int) -> None:
@@ -1276,6 +2262,8 @@ class DeviceAssignmentDlg(ArtisanResizeablDialog):
     def cancelEvent(self) -> None:
         self.aw.DeviceAssignmentDlg_activeTab = self.TabWidget.currentIndex()
         self.close()
+        self.aw.qmc.phidgetRemoteFlag = self.org_phidgetRemoteFlag
+        self.aw.qmc.yoctoRemoteFlag = self.org_yoctoRemoteFlag
         self.aw.kaleidoSerial = self.org_kaleidoSerial
 
         self.aw.qmc.ambientTempSource = self.org_ambientTempSource
@@ -1304,6 +2292,10 @@ class DeviceAssignmentDlg(ArtisanResizeablDialog):
             self.aw.LCD6frame.setVisible(False)
             self.aw.LCD7frame.setVisible(False)
             self.aw.qmc.resetlinecountcaches()
+            self.aw.ser.arduinoETChannel = str(self.arduinoETComboBox.currentText())
+            self.aw.ser.arduinoBTChannel = str(self.arduinoBTComboBox.currentText())
+            self.aw.ser.arduinoATChannel = str(self.arduinoATComboBox.currentText())
+            self.aw.ser.ArduinoFILT = [sb.value() for sb in self.FILTspinBoxes]
 
             self.aw.kaleidoEventFlags = [cb.isChecked() for cb in self.kaleidoEventFlags]
 
@@ -1336,7 +2328,21 @@ class DeviceAssignmentDlg(ArtisanResizeablDialog):
                 ##########################
                 ####  DEVICE 141 is +Kaleido Heater/Fan but +DEVICE cannot be set as main device
                 ##########################
-
+                elif meter == 'ARDUINOTC4':
+                    self.aw.qmc.device = 19
+                    self.aw.ser.baudrate = 115200
+                    self.aw.ser.bytesize = 8
+                    self.aw.ser.parity= 'N'
+                    self.aw.ser.stopbits = 1
+                    self.aw.ser.timeout = 0.8
+                    self.aw.ser.ArduinoIsInitialized = 0
+                    message = QApplication.translate('Message','Device set to {0}. Now, check Serial Port settings').format(meter)
+                else:
+                    try:
+                        self.aw.qmc.device = self.aw.qmc.devices.index(meter) + 1
+                        message = QApplication.translate('Message','Device set to {0}').format(meter)
+                    except Exception: # pylint: disable=broad-except
+                        pass
                 # ensure that by selecting a real device, the initial sampling rate is set to 3s
                 if meter != 'NONE':
                     self.aw.qmc.delay = max(self.aw.qmc.delay,self.aw.qmc.min_delay)
@@ -1621,14 +2627,73 @@ class DeviceAssignmentDlg(ArtisanResizeablDialog):
             # close all ports to force a reopen
             self.aw.qmc.disconnectProbes()
 
-            # Ambient configurations (generic ET/BT/extra sources + elevation; no Phidget/Yocto pickers)
-            self.aw.qmc.ambient_temperature_device = 0
-            self.aw.qmc.ambient_humidity_device = 0
-            self.aw.qmc.ambient_pressure_device = 0
+            # Yotopuce configurations
+            self.aw.qmc.yoctoRemoteFlag = self.yoctoBoxRemoteFlag.isChecked()
+            self.aw.qmc.yoctoServerID = self.yoctoServerId.text()
+            self.aw.qmc.YOCTO_emissivity = self.yoctoEmissivitySpinBox.value()
+            self.aw.qmc.YOCTO_async[0] = self.yoctoAyncChanFlag.isChecked()
+            self.aw.qmc.YOCTO_async[1] = self.yoctoAyncChanFlag.isChecked() # flag for channel 1 is ignored and only that of channel 0 is respected for both channels
+            self.aw.qmc.YOCTO_dataRate = self.aw.qmc.YOCTO_dataRatesValues[self.yoctoDataRateCombo.currentIndex()]
+
+            # Ambient confifgurations
+            self.aw.qmc.ambient_temperature_device = self.temperatureDeviceCombo.currentIndex()
+            self.aw.qmc.ambient_humidity_device = self.humidityDeviceCombo.currentIndex()
+            self.aw.qmc.ambient_pressure_device = self.pressureDeviceCombo.currentIndex()
             try:
                 self.aw.qmc.elevation = int(self.elevationSpinBox.value())
             except Exception: # pylint: disable=broad-except
                 pass
+
+            # Phidget configurations
+            for i in range(4):
+                self.aw.qmc.phidget1048_types[i] = self.probeTypeCombos[i].currentIndex()+1
+                self.aw.qmc.phidget1048_async[i] = self.asyncCheckBoxes1048[i].isChecked()
+                self.aw.qmc.phidget1048_changeTriggers[i] = self.aw.qmc.phidget1048_changeTriggersValues[self.changeTriggerCombos1048[i].currentIndex()]
+                self.aw.qmc.phidget1046_gain[i] = self.gainCombos1046[i].currentIndex()+1
+                self.aw.qmc.phidget1046_formula[i] = self.formulaCombos1046[i].currentIndex()
+                self.aw.qmc.phidget1046_async[i] = self.asyncCheckBoxes1046[i].isChecked()
+            self.aw.qmc.phidget1048_dataRate = self.aw.qmc.phidget_dataRatesValues[self.dataRateCombo1048.currentIndex()]
+            self.aw.qmc.phidget1046_dataRate = self.aw.qmc.phidget_dataRatesValues[self.dataRateCombo1046.currentIndex()]
+            self.aw.qmc.phidget1045_async = self.asyncCheckBoxe1045.isChecked()
+            self.aw.qmc.phidget1045_changeTrigger = self.aw.qmc.phidget1045_changeTriggersValues[self.changeTriggerCombos1045.currentIndex()]
+            self.aw.qmc.phidget1045_emissivity = self.emissivitySpinBox.value()
+            self.aw.qmc.phidget1045_dataRate = self.aw.qmc.phidget_dataRatesValues[self.dataRateCombo1045.currentIndex()]
+
+            self.aw.qmc.phidget1200_formula = self.formulaCombo1200.currentIndex()
+            self.aw.qmc.phidget1200_wire = self.wireCombo1200.currentIndex()
+            self.aw.qmc.phidget1200_async = self.asyncCheckBoxe1200.isChecked()
+            self.aw.qmc.phidget1200_changeTrigger = self.aw.qmc.phidget1200_changeTriggersValues[self.changeTriggerCombo1200.currentIndex()]
+            self.aw.qmc.phidget1200_dataRate = self.aw.qmc.phidget1200_dataRatesValues[self.rateCombo1200.currentIndex()]
+
+            self.aw.qmc.phidget1200_2_formula = self.formulaCombo1200_2.currentIndex()
+            self.aw.qmc.phidget1200_2_wire = self.wireCombo1200_2.currentIndex()
+            self.aw.qmc.phidget1200_2_async = self.asyncCheckBoxe1200_2.isChecked()
+            self.aw.qmc.phidget1200_2_changeTrigger = self.aw.qmc.phidget1200_changeTriggersValues[self.changeTriggerCombo1200_2.currentIndex()]
+            self.aw.qmc.phidget1200_2_dataRate = self.aw.qmc.phidget1200_dataRatesValues[self.rateCombo1200_2.currentIndex()]
+
+            self.aw.qmc.phidgetDAQ1400_powerSupply = self.powerCombo1400.currentIndex()
+            self.aw.qmc.phidgetDAQ1400_inputMode = self.modeCombo1400.currentIndex()
+
+            self.aw.qmc.phidgetRemoteFlag = self.phidgetBoxRemoteFlag.isChecked()
+            self.aw.qmc.phidgetServerID = self.phidgetServerId.text()
+            self.aw.qmc.phidgetPassword = self.phidgetPassword.text()
+            self.aw.qmc.phidgetRemoteOnlyFlag = self.phidgetBoxRemoteOnlyFlag.isChecked()
+            try:
+                self.aw.qmc.phidgetPort = int(self.phidgetPort.text())
+            except Exception: # pylint: disable=broad-except
+                pass
+            for i in range(8):
+                self.aw.qmc.phidget1018_async[i] = self.asyncCheckBoxes[i].isChecked()
+                self.aw.qmc.phidget1018_ratio[i] = self.ratioCheckBoxes[i].isChecked()
+                self.aw.qmc.phidget1018_dataRates[i] = self.aw.qmc.phidget_dataRatesValues[self.dataRateCombos[i].currentIndex()]
+                self.aw.qmc.phidget1018_changeTriggers[i] = self.aw.qmc.phidget1018_changeTriggersValues[self.changeTriggerCombos[i].currentIndex()]
+                self.aw.qmc.phidgetVCP100x_voltageRanges[i] = self.aw.qmc.phidgetVCP100x_voltageRangeValues[self.voltageRangeCombos[i].currentIndex()]
+
+            # restart PhidgetManager
+            try:
+                self.aw.qmc.restartPhidgetManager()
+            except Exception as e: # pylint: disable=broad-except
+                _log.exception(e)
 
             self.aw.kaleidoHost = self.kaleidoHost.text().strip()
             try:
@@ -1669,7 +2734,7 @@ class DeviceAssignmentDlg(ArtisanResizeablDialog):
             #open serial conf Dialog
             #if device is not None or not external-program (don't need serial settings config)
             if (self.aw.qmc.device not in self.aw.qmc.nonSerialDevices or
-                (self.aw.qmc.device == 138 and self.aw.kaleidoSerial)) and (self.aw.qmc.device != 50) and self.TabWidget.currentIndex() in {0,1,4}:
+                (self.aw.qmc.device == 138 and self.aw.kaleidoSerial)) and (self.aw.qmc.device != 50) and self.TabWidget.currentIndex() in {0,1,6}:
                 QTimer.singleShot(700, self.aw.setcommport)
             self.close()
             self.accept()
@@ -1702,5 +2767,5 @@ class DeviceAssignmentDlg(ArtisanResizeablDialog):
     @pyqtSlot(int)
     def tabSwitched(self, idx:int) -> None:
         self.closeHelp()
-        if idx == 3: # Ambient Tab
+        if idx == 5: # Ambient Tab
             self.updateAmbientSourceComboBoxes()

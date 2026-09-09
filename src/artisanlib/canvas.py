@@ -65,6 +65,7 @@ from artisanlib.time import ArtisanTime
 #from artisanlib.filters import LiveMedian
 from artisanlib.dialogs import ArtisanMessageBox
 from artisanlib.atypes import SerialSettings, BTBreakParams, BbpCache, AlarmSet, EnergyMetrics
+from artisanlib.phidgets import PhidgetManager
 
 from PyQt6.QtWidgets import (QApplication, QWidget, QMessageBox,
                          QGraphicsEffect,
@@ -795,7 +796,7 @@ class tgraphcanvas(QObject):
                        '-Omega HH802U',         #16
                        '-Omega HH309',          #17
                        'NONE',                  #18
-                       '-ARDUINOTC4',           #19
+                       'ARDUINOTC4',           #19
                        '-TE VA18B',             #20
                        '-CENTER 309 34',        #21
                        '+PID SV/DUTY %',        #22
@@ -804,55 +805,55 @@ class tgraphcanvas(QObject):
                        '+Virtual',              #25
                        '-DTAtemperature',       #26
                        '-Program',              #27
-                       '-ArduinoTC4 34',        #28
+                       '+ArduinoTC4 34',        #28
                        '-MODBUS',               #29
                        '-VOLTCRAFT K201',       #30
                        '-Amprobe TMD-56',       #31
-                       '-ArduinoTC4 56',        #32
+                       '+ArduinoTC4 56',        #32
                        '-MODBUS 34',            #33
-                       '-Phidget 1048 4xTC 01', #34
-                       '-Phidget 1048 4xTC 23', #35
-                       '-Phidget 1048 4xTC AT', #36
-                       '-Phidget 1046 4xRTD 01',#37
-                       '-Phidget 1046 4xRTD 23',#38
+                       'Phidget 1048 4xTC 01',  #34
+                       '+Phidget 1048 4xTC 23', #35
+                       '+Phidget 1048 4xTC AT', #36
+                       'Phidget 1046 4xRTD 01', #37
+                       '+Phidget 1046 4xRTD 23',#38
                        '-Mastech MS6514',       #39
-                       '-Phidget IO 01',        #40
-                       '-Phidget IO 23',        #41
-                       '-Phidget IO 45',        #42
-                       '-Phidget IO 67',        #43
-                       '-ArduinoTC4 78',        #44
-                       '-Yocto Thermocouple',   #45
-                       '-Yocto PT100',          #46
-                       '-Phidget 1045 IR',      #47
+                       'Phidget IO 01',         #40
+                       '+Phidget IO 23',        #41
+                       '+Phidget IO 45',        #42
+                       '+Phidget IO 67',        #43
+                       '+ArduinoTC4 78',        #44
+                       'Yocto Thermocouple',    #45
+                       'Yocto PT100',           #46
+                       'Phidget 1045 IR',       #47
                        '-Program 34',           #48
                        '-Program 56',           #49
                        'DUMMY',                 #50
                        '-CENTER 304 34',        #51
-                       '-Phidget 1051 1xTC 01', #52
+                       'Phidget 1051 1xTC 01',  #52
                        '-Hottop BT/ET',         #53
                        '-Hottop Heater/Fan',    #54
                        '-MODBUS 56',            #55
                        '-Apollo DT301',         #56
                        '-EXTECH 755',           #57
-                       '-Phidget TMP1101 4xTC 01',  #58
-                       '-Phidget TMP1101 4xTC 23',  #59
-                       '-Phidget TMP1101 4xTC AT',  #60
-                       '-Phidget TMP1100 1xTC',     #61
-                       '-Phidget 1011 IO 01',       #62
-                       '-Phidget HUB IO 01',        #63
-                       '-Phidget HUB IO 23',        #64
-                       '-Phidget HUB IO 45',        #65
+                       'Phidget TMP1101 4xTC 01',  #58
+                       '+Phidget TMP1101 4xTC 23', #59
+                       '+Phidget TMP1101 4xTC AT', #60
+                       'Phidget TMP1100 1xTC',     #61
+                       'Phidget 1011 IO 01',       #62
+                       'Phidget HUB IO 01',        #63
+                       '+Phidget HUB IO 23',       #64
+                       '+Phidget HUB IO 45',       #65
                        '-Omega HH806W',            #66 NOT WORKING
                        '-VOLTCRAFT PL-125-T2',     #67
-                       '-Phidget TMP1200 1xRTD A', #68
-                       '-Phidget IO Digital 01',   #69
-                       '-Phidget IO Digital 23',   #70
-                       '-Phidget IO Digital 45',   #71
-                       '-Phidget IO Digital 67',   #72
-                       '-Phidget 1011 IO Digital 01', #73
-                       '-Phidget HUB IO Digital 01',  #74
-                       '-Phidget HUB IO Digital 23',  #75
-                       '-Phidget HUB IO Digital 45',  #76
+                       'Phidget TMP1200 1xRTD A',  #68
+                       'Phidget IO Digital 01',    #69
+                       '+Phidget IO Digital 23',   #70
+                       '+Phidget IO Digital 45',   #71
+                       '+Phidget IO Digital 67',   #72
+                       'Phidget 1011 IO Digital 01', #73
+                       'Phidget HUB IO Digital 01', #74
+                       '+Phidget HUB IO Digital 23',#75
+                       '+Phidget HUB IO Digital 45',#76
                        '-VOLTCRAFT PL-125-T4',      #77
                        '-VOLTCRAFT PL-125-T4 34',   #78
                        '-S7',                       #79
@@ -871,49 +872,49 @@ class tgraphcanvas(QObject):
                        '-Probat Middleware',                 #92
                        '-Probat Middleware burner/drum',     #93
                        '-Probat Middleware fan/pressure',    #94
-                       '-Phidget DAQ1400 Current',  #95
-                       '-Phidget DAQ1400 Frequency',#96
-                       '-Phidget DAQ1400 Digital',  #97
-                       '-Phidget DAQ1400 Voltage',  #98
+                       'Phidget DAQ1400 Current',   #95
+                       'Phidget DAQ1400 Frequency', #96
+                       'Phidget DAQ1400 Digital',   #97
+                       'Phidget DAQ1400 Voltage',   #98
                        '-Aillio Bullet R1 IBTS/BT', #99
-                       '-Yocto IR',                 #100
+                       'Yocto IR',                  #100
                        '-Behmor BT/CT',             #101
                        '-Behmor 34',                #102
                        '-VICTOR 86B',               #103
                        '-Behmor 56',                #104
                        '-Behmor 78',                #105
-                       '-Phidget HUB IO 0',         #106
-                       '-Phidget HUB IO Digital 0', #107
-                       '-Yocto 4-20mA Rx',          #108
+                       'Phidget HUB IO 0',          #106
+                       'Phidget HUB IO Digital 0',  #107
+                       'Yocto 4-20mA Rx',           #108
                        '-MODBUS 78',                #109
                        '-S7 910',                   #110
                        '-WebSocket',                #111
                        '-WebSocket 34',             #112
                        '-WebSocket 56',             #113
-                       '-Phidget TMP1200 1xRTD B',  #114
+                       '+Phidget TMP1200 1xRTD B',  #114
                        '-HB BT/ET',                 #115
                        '-HB DT/IT',                 #116
                        '-HB AT',                    #117
                        '-WebSocket 78',             #118
                        '-WebSocket 910',            #119
-                       '-Yocto 0-10V Rx',           #120
-                       '-Yocto milliVolt Rx',       #121
-                       '-Yocto Serial',             #122
-                       '-Phidget VCP1000',          #123
-                       '-Phidget VCP1001',          #124
-                       '-Phidget VCP1002',          #125
+                       'Yocto 0-10V Rx',            #120
+                       'Yocto milliVolt Rx',        #121
+                       'Yocto Serial',              #122
+                       'Phidget VCP1000',           #123
+                       'Phidget VCP1001',           #124
+                       'Phidget VCP1002',           #125
                        '-ARC BT/ET',                #126
                        '-ARC MET/IT',               #127
                        '-ARC AT',                   #128
-                       '-Yocto Power',              #129
-                       '-Yocto Energy',             #130
-                       '-Yocto Voltage',            #131
-                       '-Yocto Current',            #132
-                       '-Yocto Sensor',             #133
+                       'Yocto Power',               #129
+                       'Yocto Energy',              #130
+                       'Yocto Voltage',             #131
+                       'Yocto Current',             #132
+                       'Yocto Sensor',              #133
                        '-Santoker BT/ET',           #134
                        '-Santoker Power/Fan',       #135
                        '-Santoker Drum',            #136
-                       '-Phidget DAQ1500',          #137
+                       'Phidget DAQ1500',           #137
                        'Kaleido BT/ET',             #138
                        '+Kaleido SV/AT',            #139
                        '+Kaleido Drum/AH',          #140
@@ -922,20 +923,20 @@ class tgraphcanvas(QObject):
                        '-IKAWA SET/RPM',            #143
                        '-IKAWA Heater/Fan',         #144
                        '-IKAWA State/Humidity',     #145
-                       '-Phidget DAQ1000 01',       #146
-                       '-Phidget DAQ1000 23',       #147
-                       '-Phidget DAQ1000 45',       #148
-                       '-Phidget DAQ1000 67',       #149
+                       'Phidget DAQ1000 01',        #146
+                       '+Phidget DAQ1000 23',       #147
+                       '+Phidget DAQ1000 45',       #148
+                       '+Phidget DAQ1000 67',       #149
                        '-MODBUS 910',               #150
                        '-S7 1112',                  #151
-                       '-Phidget DAQ1200 01',       #152
-                       '-Phidget DAQ1200 23',       #153
-                       '-Phidget DAQ1300 01',       #154
-                       '-Phidget DAQ1300 23',       #155
-                       '-Phidget DAQ1301 01',       #156
-                       '-Phidget DAQ1301 23',       #157
-                       '-Phidget DAQ1301 45',       #158
-                       '-Phidget DAQ1301 67',       #159
+                       'Phidget DAQ1200 01',        #152
+                       '+Phidget DAQ1200 23',       #153
+                       'Phidget DAQ1300 01',        #154
+                       '+Phidget DAQ1300 23',       #155
+                       'Phidget DAQ1301 01',        #156
+                       '+Phidget DAQ1301 23',       #157
+                       '+Phidget DAQ1301 45',       #158
+                       '+Phidget DAQ1301 67',       #159
                        f'-IKAWA {deltaLabelUTF8}Humidity/{deltaLabelUTF8}Humidity Dir.',    #160
                        '-Omega HH309 34',           #161
                        '-Digi-Sense 20250-07',      #162
@@ -944,8 +945,8 @@ class tgraphcanvas(QObject):
                        '-Mugma Heater/Fan',         #165
                        '-Mugma Heater/Catalyzer',   #166
                        '-Mugma SV',                 #167
-                       '-Phidget TMP1202 1xRTD A',  #168
-                       '-Phidget TMP1202 1xRTD B',  #169
+                       'Phidget TMP1202 1xRTD A',   #168
+                       '+Phidget TMP1202 1xRTD B',  #169
                        '-ColorTrack Serial',        #170
                        '-Santoker R BT/ET',         #171
                        '-Santoker IR/Board',        #172
@@ -967,11 +968,11 @@ class tgraphcanvas(QObject):
                        '-RoastSeeNEXT RoR/FoR',         #188
                        '-RoastSeeNEXT Distance/Time',   #189
                        '-RoastSeeNEXT Yellow',          #190
-                       '-Phidget TMP1000',           #191
-                       '-Phidget HUM1000 Hum/Temp',  #192
-                       '-Phidget PRE1000',           #193
-                       '-Yocto Meteo Hum/Temp',      #194
-                       '-Yocto Meteo Pressure',      #195
+                       '+Phidget TMP1000',           #191
+                       '+Phidget HUM1000 Hum/Temp',  #192
+                       '+Phidget PRE1000',           #193
+                       '+Yocto Meteo Hum/Temp',      #194
+                       '+Yocto Meteo Pressure',      #195
                        '-Orbiter BT/ET',             #196
                        '-Orbiter IT/DT',             #197
                        '-Orbiter Sound/Drum',        #198
@@ -987,16 +988,66 @@ class tgraphcanvas(QObject):
 
         # ADD DEVICE:
         # ids of (main) Phidget devices (without a + in front of their name string) as well as Phidget TMP100, HUM100 or PRE1000
-        self.phidgetDevices : Final[list[int]] = []
+        self.phidgetDevices : Final[list[int]] = [
+            34, # Phidget 1048
+            37, # Phidget 1046
+            40, # Phidget IO
+            47, # Phidget 1045
+            52, # Phidget 1051
+            58, # Phidget TMP1101
+            61, # Phidget TMP1100
+            62, # Phidget 1011
+            63, # Phidget HUB IO 01
+            64, # Phidget HUB IO 23
+            65, # Phidget HUB IO 45
+            68, # Phidget TMP1200
+            69, # Phidget IO Digital
+            73, # Phidget 1011 IO Digital
+            74, # Phidget HUB IO Digital 01
+            75, # Phidget HUB IO Digital 23
+            76, # Phidget HUB IO Digital 45
+            95, # Phidget DAQ1400 Current
+            96, # Phidget DAQ1400 Frequency
+            97, # Phidget DAQ1400 Digital
+            98, # Phidget DAQ1400 Voltage
+            106, # Phidget HUB IO 0
+            107, # Phidget HUB IO Digital 0
+            123, # Phidget VCP1000
+            124, # Phidget VCP1001
+            125, # Phidget VCP1002
+            137, # Phidget DAQ1500
+            146, # Phidget DAQ1000
+            152, # Phidget DAQ1200
+            154, # Phidget DAQ1300
+            156, # Phidget DAQ1301
+            168, # Phidget TMP1202
+            191, # Phidget TMP1000
+            192, # Phidget HUM1000
+            193, # Phidget PRE1000
+        ]
 
         # ADD DEVICE:
         # ids of (main) devices (without a + in front of their name string)
         # that do NOT communicate via any serial port thus do not need any serial port configuration
         # Kaleido Serial still uses kaleidoSerial flag elsewhere
-        self.nonSerialDevices : Final[list[int]] = [
+        self.nonSerialDevices : Final[list[int]] = self.phidgetDevices + [
             18, # NONE (manual)
+            45, # Yocto Thermocouple
+            46, # Yocto PT100
             50, # DUMMY
-            138 # Kaleido BT/ET (network sampling)
+            100, # Yocto IR
+            108, # Yocto 4-20mA Rx
+            120, # Yocto-0-10V-Rx
+            121, # Yocto-milliVolt-Rx
+            122, # Yocto-Serial
+            129, # Yocto Power
+            130, # Yocto Energy
+            131, # Yocto Voltage
+            132, # Yocto Current
+            133, # Yocto Sensor
+            138, # Kaleido BT/ET
+            194, # Yocto Meteo Hum/Temp
+            195, # Yocto Meteo Pressure
         ]
 
         # ADD DEVICE:
@@ -1025,7 +1076,17 @@ class tgraphcanvas(QObject):
 
         # ADD DEVICE:
         # ids of devices with binary results (0 and 1) certain input filters should not be applied
-        self.binaryDevices : Final[list[int]] = []
+        self.binaryDevices : Final[list[int]] = [
+            69, # Phidget IO Digital 01
+            70, # Phidget IO Digital 23
+            71, # Phidget IO Digital 45
+            72, # Phidget IO Digital 67
+            73, # Phidget 1011 IO Digital 01
+            74, # Phidget HUB IO Digital 01
+            75, # Phidget HUB IO Digital 23
+            76, # Phidget HUB IO Digital 45
+            107, # Phidget HUB IO Digital 0
+        ]
 
         #extra devices
         self.extradevices:list[int] = []                            # list with indexes for extra devices
@@ -2721,6 +2782,51 @@ class tgraphcanvas(QObject):
         return res
 
     def updateAmbientTempFromPhidgetModulesOrCurve(self) -> None:
+        if not self.ambientTempSource:
+            AT_device = None
+            try:
+                AT_device = self.extradevices.index(36)
+            except Exception: # pylint: disable=broad-except
+                try:
+                    AT_device = self.extradevices.index(60)
+                except Exception: # pylint: disable=broad-except
+                    pass
+            if AT_device is not None:
+                # 1048_AT channel #36, TMP1101_AT channel #60
+                # we try to access that devices first channel to retrieve the temperature data
+                try:
+                    ser = self.aw.extraser[AT_device]
+                    if ser.PhidgetTemperatureSensor is not None:
+                        at = ser.PhidgetTemperatureSensor[0].getTemperature()
+                        if self.mode == 'F':
+                            at = float2float(fromCtoFstrict(at))
+                        self.ambientTemp = float2float(at)
+                except Exception as e: # pylint: disable=broad-except
+                    _log.exception(e)
+            # in case the AT channel of the 1048 or the TMP1101 is not used as extra device, we try to attach to it anyhow and read the temp off
+            elif self.ambientTemp == 0.0 and self.device in {34, 58}: # Phidget 1048 or TMP1101 channel 4 (use internal temp)
+                try:
+                    if self.aw.ser.PhidgetTemperatureSensor is not None and self.aw.ser.PhidgetTemperatureSensor[0].getAttached():
+                        from Phidget22.Devices.TemperatureSensor import TemperatureSensor as PhidgetTemperatureSensor # type: ignore[import-untyped]
+                        ambient = PhidgetTemperatureSensor()
+                        ambient.setDeviceSerialNumber(self.aw.ser.PhidgetTemperatureSensor[0].getDeviceSerialNumber())
+                        if self.device == 58:
+                            ambient.setHubPort(self.aw.ser.PhidgetTemperatureSensor[0].getHubPort())
+                        ambient.setChannel(4)
+                        ambient.openWaitForAttachment(1000) # timeout in ms
+                        if self.phidgetRemoteOnlyFlag:
+                            libtime.sleep(.8)
+                        else:
+                            libtime.sleep(.5)
+                        t = ambient.getTemperature()
+                        if self.mode == 'F':
+                            self.ambientTemp = float2float(fromCtoFstrict(t))
+                        else:
+                            self.ambientTemp = float2float(t)
+                        if ambient.getAttached():
+                            ambient.close()
+                except Exception as e: # pylint: disable=broad-except
+                    _log.exception(e)
         res = self.ambientSourceAvg(self.ambientTempSource)
         if res is not None and not math.isnan(res):
             self.ambientTemp = float2float(float(res))
@@ -2743,6 +2849,7 @@ class tgraphcanvas(QObject):
         # take the ambient pressure from the selected ambient pressure curve
         self.updateAmbientPressure()
         try:
+            self.startPhidgetManager()
             self.getAmbientData()
         except Exception as e: # pylint: disable=broad-except
             _log.exception(e)
@@ -12833,18 +12940,48 @@ class tgraphcanvas(QObject):
                 self.extraNoneTempHint2.append(False)
 
     def addPhidgetServer(self) -> None:
-        return
+        if not self.phidgetServerAdded:
+            from Phidget22.Net import Net as PhidgetNetwork # type: ignore[import-untyped]
+            if self.phidgetServerID == '' and not self.phidgetServiceDiscoveryStarted:
+                try:
+                    # we enable the automatic service discovery if no server host is given
+                    from Phidget22.PhidgetServerType import PhidgetServerType # type: ignore[import-untyped]
+                    PhidgetNetwork.enableServerDiscovery(PhidgetServerType.PHIDGETSERVER_DEVICEREMOTE)
+                    self.phidgetServiceDiscoveryStarted = True
+                    self.aw.sendmessage(QApplication.translate('Message','Phidget service discovery started...'))
+                except Exception as e:  # pylint: disable=broad-except
+                    _log.exception(e)
+            else:
+                PhidgetNetwork.addServer('PhidgetServer',self.phidgetServerID,self.phidgetPort,self.phidgetPassword,0)
+                self.phidgetServerAdded = True
 
     def removePhidgetServer(self) -> None:
-        return
+        if self.phidgetServerAdded:
+            from Phidget22.Net import Net as PhidgetNetwork
+            try:
+                PhidgetNetwork.removeServer('PhidgetServer')
+            except Exception as e: # pylint: disable=broad-except
+                _log.exception(e)
+            self.phidgetServerAdded = False
+            if self.phidgetServiceDiscoveryStarted:
+                try:
+                    from Phidget22.PhidgetServerType import PhidgetServerType
+                    PhidgetNetwork.disableServerDiscovery(PhidgetServerType.PHIDGETSERVER_DEVICEREMOTE)
+                    self.phidgetServiceDiscoveryStarted = False
+                except Exception as e: # pylint: disable=broad-except
+                    _log.exception(e)
 
     @staticmethod
     def deviceLogDEBUG() -> None:
-        return
+        from Phidget22.Devices.Log import Log as PhidgetLog # type: ignore[import-untyped]
+        from Phidget22.LogLevel import LogLevel as PhidgetLogLevel # type: ignore[import-untyped]
+        PhidgetLog.setLevel(PhidgetLogLevel.PHIDGET_LOG_VERBOSE)
 
     @staticmethod
     def deviceLLogINFO() -> None:
-        return
+        from Phidget22.Devices.Log import Log as PhidgetLog
+        from Phidget22.LogLevel import LogLevel as PhidgetLogLevel
+        PhidgetLog.setLevel(PhidgetLogLevel.PHIDGET_LOG_INFO)
 
     # returns True if any device (main or extra) is a Phidget, ambient sensor or button/slider actions contain Phidget commands
     # the PhidgetManager which makes Phidgets accessible is only started if PhdigetsConfigured returns True
@@ -12883,16 +13020,61 @@ class tgraphcanvas(QObject):
             any(i in slider_phidget_action_ids for i in self.aw.eventslideractions))           # phidget actions in slider commands
 
 
-    # PhidgetManager stripped: Kaleido-only build. Keep no-ops so callers do not import Phidgets.
+    # the PhidgetManager needs to run to allow Phidgets to attach
+    # the PhidgetManager is only started if self.PhidgetsConfigured() returns True signaling
+    # that Phidget modules are configured as main/extra devices, ambient devices, or in button/slider actions
     @pyqtSlot()
     def startPhidgetManager(self) -> None:
-        return
+        # this is needed to suppress the message on the ignored Exception
+        #                            # Phidget that is raised on starting the PhidgetManager without installed
+        #                            # Phidget driver (artisanlib/suppress_error.py fails to suppress this)
+        if not self.aw.app.artisanviewerMode and self.PhidgetsConfigured():
+            # Phidget server is only started if any device or action addressing Phidgets is configured
+            if self.phidgetManager is None:
+                try:
+                    from Phidget22.Devices.Log import Log as PhidgetLog
+                    from Phidget22.LogLevel import LogLevel as PhidgetLogLevel
+                    PhidgetLog.enable(PhidgetLogLevel.PHIDGET_LOG_DEBUG, self.device_log_file)
+                    PhidgetLog.enableRotating()
+                    _log.info('phidgetLog started')
+                except Exception: # pylint: disable=broad-except
+                    pass # logging might already be enabled
+            if self.phidgetRemoteFlag:
+                try:
+                    self.addPhidgetServer()
+                    _log.info('phidgetServer added')
+                except Exception as e: # pylint: disable=broad-except
+                    _log.exception(e)
+                    if self.device in self.phidgetDevices:
+                        self.adderror(QApplication.translate('Error Message',"Exception: phidgetServer couldn't be added. Verify that the Phidget driver is correctly installed!"))
+            if self.phidgetManager is None:
+                try:
+                    self.phidgetManager = PhidgetManager()
+                    _log.info('phidgetManager started')
+                except Exception as e: # pylint: disable=broad-except
+                    _log.exception(e)
+                    if self.device in self.phidgetDevices:
+                        self.adderror(QApplication.translate('Error Message',"Exception: PhidgetManager couldn't be started. Verify that the Phidget driver is correctly installed!"))
 
     def stopPhidgetManager(self) -> None:
-        return
+        if not self.flagon:
+            if self.phidgetManager is not None:
+                self.phidgetManager.close()
+                self.phidgetManager = None
+                _log.info('phidgetManager stopped')
+                try:
+                    from Phidget22.Devices.Log import Log as PhidgetLog
+                    PhidgetLog.disable()
+                    _log.info('phidgetLog stopped')
+                except Exception: # pylint: disable=broad-except
+                    pass
+            self.removePhidgetServer()
 
     def restartPhidgetManager(self) -> None:
-        return
+        if not self.flagon:
+            _log.info('restart phidgetManager')
+            self.stopPhidgetManager()
+            self.startPhidgetManager()
 
     # this one is protected by the sampleSemaphore not to mess up with the timex during sampling
     def resetTimer(self) -> None:
@@ -12913,6 +13095,7 @@ class tgraphcanvas(QObject):
                 return
 
             if self.aw.simulator is None:
+                self.startPhidgetManager()
                 # collect ambient data if any
                 if self.ambient_pressure_device or self.ambient_humidity_device or self.ambient_temperature_device:
                     self.ambiThread = QThread()
@@ -13344,7 +13527,60 @@ class tgraphcanvas(QObject):
 
     def getAmbientData(self) -> None:
         _log.debug('getAmbientData()')
-        return
+        try:
+            humidity = None
+            temp = None # assumed to be gathered in C (not F!)
+            pressure = None
+
+            #--- humidity
+            if self.ambient_humidity_device == 1: # Phidget HUM1000
+                humidity = self.aw.ser.PhidgetHUM1000humidity()
+            elif self.ambient_humidity_device == 2: # Yocto Meteo
+                humidity = self.aw.ser.YoctoMeteoHUM()
+
+            #--- temperature
+            if self.ambient_temperature_device == 1: # Phidget HUM1000
+                temp = self.aw.ser.PhidgetHUM1000temperature()
+            elif self.ambient_temperature_device == 2: # Yocto Meteo
+                temp = self.aw.ser.YoctoMeteoTEMP()
+            elif self.ambient_temperature_device == 3: # Phidget TMP1000
+                temp = self.aw.ser.PhidgetTMP1000temperature()
+
+            #--- pressure
+            if self.ambient_pressure_device == 1: # Phidget PRE1000
+                pressure = self.aw.ser.PhidgetPRE1000pressure()
+                if pressure is not None:
+                    pressure = pressure * 10 # convert to hPa/mbar
+            elif self.ambient_pressure_device == 2: # Yocto Meteo
+                pressure = self.aw.ser.YoctoMeteoPRESS()
+
+            # calc final values
+            if pressure is not None:
+                # we just assume 23C room temperature if no ambient temperature is given or ambient temperature is out of range
+                t = 23 if temp is None or temp < -20 or temp > 40 else temp
+                pressure = self.barometricPressure(pressure,t,self.elevation)
+
+            # set and report
+            if humidity is not None:
+                self.ambient_humidity = float2float(humidity,1)
+                self.ambient_humidity_sampled = self.ambient_humidity
+                self.aw.sendmessage(QApplication.translate('Message','Humidity: {}%').format(self.ambient_humidity))
+                libtime.sleep(1)
+
+            if temp is not None:
+                if self.mode == 'F':
+                    temp = fromCtoFstrict(temp)
+                self.ambientTemp = float2float(temp,1)
+                self.ambientTemp_sampled = self.ambientTemp
+                self.aw.sendmessage(QApplication.translate('Message','Temperature: {}{}').format(self.ambientTemp,self.mode))
+                libtime.sleep(1)
+
+            if pressure is not None:
+                self.ambient_pressure = float2float(pressure,1)
+                self.ambient_pressure_sampled = self.ambient_pressure
+                self.aw.sendmessage(QApplication.translate('Message','Pressure: {}hPa').format(self.ambient_pressure))
+        except Exception as e:  # pylint: disable=broad-except
+            _log.exception(e)
 
     # computes the barometric pressure from
     #   aap:  atmospheric pressure in hPa
@@ -13360,20 +13596,180 @@ class tgraphcanvas(QObject):
         _log.debug('disconnectProbesFromSerialDevice(%s)',ser)
         try:
             self.samplingSemaphore.acquire(1)
+
             # close main serial port
             try:
                 ser.closeport()
             except Exception as e: # pylint: disable=broad-except
                 _log.exception(e)
+            # disconnect phidgets
+            ser_PhidgetTemperatureSensor = ser.PhidgetTemperatureSensor
+            if ser_PhidgetTemperatureSensor is not None:
+                try:
+                    if len(ser_PhidgetTemperatureSensor)> 0 and ser_PhidgetTemperatureSensor[0].getAttached():
+                        serial = ser_PhidgetTemperatureSensor[0].getDeviceSerialNumber()
+                        port = ser_PhidgetTemperatureSensor[0].getHubPort()  # returns 0 for USB Phidgets!
+                        deviceType = ser_PhidgetTemperatureSensor[0].getDeviceID()
+                        ser_PhidgetTemperatureSensor[0].close()
+                        ser.phidget1048detached(serial,port,deviceType,0) # call detach handler to release from PhidgetManager
+                except Exception as e: # pylint: disable=broad-except
+                    _log.exception(e)
+                try:
+                    if len(ser_PhidgetTemperatureSensor) > 1 and ser_PhidgetTemperatureSensor[1].getAttached():
+                        serial = ser_PhidgetTemperatureSensor[1].getDeviceSerialNumber()
+                        port = ser_PhidgetTemperatureSensor[1].getHubPort()  # returns 0 for USB Phidgets!
+                        deviceType = ser_PhidgetTemperatureSensor[1].getDeviceID()
+                        ser_PhidgetTemperatureSensor[1].close()
+                        ser.phidget1048detached(serial,port,deviceType,1) # call detach handler to release from PhidgetManager
+                except Exception as e: # pylint: disable=broad-except
+                    _log.exception(e)
+                ser.Phidget1048values = [[],[],[],[]]
+                ser.Phidget1048lastvalues = [-1.0]*4
+                ser.PhidgetTemperatureSensor = None
+            ser_PhidgetIRSensor = ser.PhidgetIRSensor
+            if ser_PhidgetIRSensor is not None:
+                try:
+                    if ser_PhidgetIRSensor.getAttached():
+                        serial = ser_PhidgetIRSensor.getDeviceSerialNumber()
+                        port = ser_PhidgetIRSensor.getHubPort() # returns 0 for USB Phidgets!
+                        deviceType = ser_PhidgetIRSensor.getDeviceID()
+                        ser_PhidgetIRSensor.close()
+                        ser.phidget1045detached(serial,port,deviceType) # call detach handler to release from PhidgetManager
+                except Exception as e: # pylint: disable=broad-except
+                    _log.exception(e)
+                ser_PhidgetIRSensorIC = ser.PhidgetIRSensorIC
+                try:
+                    if ser_PhidgetIRSensorIC is not None and ser_PhidgetIRSensorIC.getAttached():
+                        ser_PhidgetIRSensorIC.close()
+                except Exception as e: # pylint: disable=broad-except
+                    _log.exception(e)
+                ser.PhidgetIRSensor = None
+                ser.Phidget1045values = [] # async values of the one channel
+                ser.Phidget1045lastvalue = -1
+                ser.Phidget1045tempIRavg = None
+                ser.PhidgetIRSensorIC = None
+            ser_PhidgetBridgeSensor = ser.PhidgetBridgeSensor
+            if ser_PhidgetBridgeSensor is not None:
+                try:
+                    if len(ser_PhidgetBridgeSensor)>0 and ser_PhidgetBridgeSensor[0].getAttached():
+                        serial = ser_PhidgetBridgeSensor[0].getDeviceSerialNumber()
+                        port = ser_PhidgetBridgeSensor[0].getHubPort()   # returns 0 for USB Phidgets!
+                        deviceType = ser_PhidgetBridgeSensor[0].getDeviceID()
+                        ser_PhidgetBridgeSensor[0].close()
+                        ser.phidget1046detached(serial,port,deviceType,0) # call detach handler to release from PhidgetManager
+                except Exception as e: # pylint: disable=broad-except
+                    _log.exception(e)
+                try:
+                    if len(ser_PhidgetBridgeSensor) > 1 and ser_PhidgetBridgeSensor[1].getAttached():
+                        serial = ser_PhidgetBridgeSensor[1].getDeviceSerialNumber()
+                        port = ser_PhidgetBridgeSensor[1].getHubPort()   # returns 0 for USB Phidgets!
+                        deviceType = ser_PhidgetBridgeSensor[1].getDeviceID()
+                        ser_PhidgetBridgeSensor[1].close()
+                        ser.phidget1046detached(serial,port,deviceType,1) # call detach handler to release from PhidgetManager
+                except Exception as e: # pylint: disable=broad-except
+                    _log.exception(e)
+                ser.Phidget1046values = [[],[],[],[]]
+                ser.Phidget1046lastvalues = [-1.0]*4
+                ser.PhidgetBridgeSensor = None
+            ser_PhidgetIO = ser.PhidgetIO
+            if ser_PhidgetIO is not None:
+                try:
+                    if len(ser_PhidgetIO) > 0 and ser_PhidgetIO[0].getAttached():
+                        serial = ser_PhidgetIO[0].getDeviceSerialNumber()
+                        port = ser_PhidgetIO[0].getHubPort()   # returns 0 for USB Phidgets!
+                        className = ser_PhidgetIO[0].getChannelClassName()
+                        deviceType = ser_PhidgetIO[0].getDeviceID()
+                        ser_PhidgetIO[0].close()
+                        ser.phidget1018detached(serial,port,className,deviceType,0)
+                except Exception as e: # pylint: disable=broad-except
+                    _log.exception(e)
+                try:
+                    if len(ser_PhidgetIO) > 1 and ser_PhidgetIO[1].getAttached():
+                        serial = ser_PhidgetIO[1].getDeviceSerialNumber()
+                        port = ser_PhidgetIO[1].getHubPort()   # returns 0 for USB Phidgets!
+                        className = ser_PhidgetIO[1].getChannelClassName()
+                        deviceType = ser_PhidgetIO[1].getDeviceID()
+                        ser_PhidgetIO[1].close()
+                        ser.phidget1018detached(serial,port,className,deviceType,1)
+                except Exception as e: # pylint: disable=broad-except
+                    _log.exception(e)
+                ser.PhidgetIO = None
+                ser.PhidgetIOvalues = [[],[],[],[],[],[],[],[]]
+                ser.PhidgetIOlastvalues = [-1.0]*8
+            if ser.YOCTOsensor is not None:
+                try:
+                    ser.YOCTOsensor = None
+                    ser.YOCTOchan1 = None
+                    ser.YOCTOchan2 = None
+                    ser.YOCTOtempIRavg = None
+                    if ser.YOCTOthread is not None:
+                        ser.YOCTOthread.join()
+                        ser.YOCTOthread = None
+                    ser.YOCTOvalues = [[],[]]
+                    ser.YOCTOlastvalues = [-1.0]*2
+                    from yoctopuce.yocto_api import YAPI
+                    YAPI.FreeAPI()
+                except Exception as e: # pylint: disable=broad-except
+                    _log.exception(e)
         finally:
             if self.samplingSemaphore.available() < 1:
                 self.samplingSemaphore.release(1)
 
+    # close Phidget and and Yocto outputs
     def closePhidgetOUTPUTs(self) -> None:
-        return
+        _log.debug('closePhidgetOUTPUTs')
+        # close Phidget Digital Outputs
+        self.aw.ser.phidgetOUTclose()
+        # close Phidget Digital Outputs on Hub
+        self.aw.ser.phidgetOUTcloseHub()
+        # close Phidget IO Outputs
+        self.aw.ser.phidgetBinaryOUTclose()
+        # close Phidget Analog Outputs
+        self.aw.ser.phidgetVOUTclose()
+        # close Phidget DCMotors
+        self.aw.ser.phidgetDCMotorClose()
+        # close Phidget RC Servos
+        self.aw.ser.phidgetRCclose()
+        # close Phidget Stepper Motors
+        self.aw.ser.phidgetStepperClose()
+        # close Yocto Voltage Outputs
+        self.aw.ser.yoctoVOUTclose()
+        # close Yocto Current Outputs
+        self.aw.ser.yoctoCOUTclose()
+        # close Yocto Relay Outputs
+        self.aw.ser.yoctoRELclose()
+        # close Yocto Servo Outputs
+        self.aw.ser.yoctoSERVOclose()
+        # close Yocto PWM Outputs
+        self.aw.ser.yoctoPWMclose()
 
     def closePhidgetAMBIENTs(self) -> None:
-        return
+        _log.debug('closePhidgetAMBIENTs')
+        # note that we do not unregister this detach in the self.phidgetManager as we only support one of those devices
+        try:
+            if self.aw.ser.TMP1000temp is not None and self.aw.ser.TMP1000temp.getAttached():
+                self.aw.ser.TMP1000temp.close()
+                _log.debug('Phidget TMP1000 temperature channel closed')
+        except Exception as e: # pylint: disable=broad-except
+            _log.exception(e)
+        try:
+            if self.aw.ser.PhidgetHUMtemp is not None and self.aw.ser.PhidgetHUMtemp.getAttached():
+                self.aw.ser.PhidgetHUMtemp.close()
+                _log.debug('Phidget HUM100x temperature channel closed')
+        except Exception as e: # pylint: disable=broad-except
+            _log.exception(e)
+        try:
+            if self.aw.ser.PhidgetHUMhum is not None and self.aw.ser.PhidgetHUMhum.getAttached():
+                self.aw.ser.PhidgetHUMhum.close()
+                _log.debug('Phidget HUM100x humidity channel closed')
+        except Exception as e: # pylint: disable=broad-except
+            _log.exception(e)
+        try:
+            if self.aw.ser.PhidgetPREpre is not None and self.aw.ser.PhidgetPREpre.getAttached():
+                self.aw.ser.PhidgetPREpre.close()
+                _log.debug('Phidget PRE1000 pressure channel closed')
+        except Exception as e: # pylint: disable=broad-except
+            _log.exception(e)
 
 
     @pyqtSlot()
