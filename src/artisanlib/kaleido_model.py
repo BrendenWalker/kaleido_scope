@@ -24,7 +24,7 @@ _INPUT_DIM: Final[int] = 2
 
 @dataclass
 class KaleidoModelParams:
-    """Lite plant params; defaults are M6-corpus fitted (docs/roasts/kaleido_model_m6.json)."""
+    """Lite plant params; defaults are M6-corpus fitted (baked from offline calibration)."""
 
     tau_element: float = 15.0  # s; log-prior ~12-20 (heater delay)
     tau_chamber: float = 25.0

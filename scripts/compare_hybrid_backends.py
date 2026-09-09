@@ -4,7 +4,7 @@
 Reports RoR RMSE vs the M6 shape schedule, peak |RoR|, and actuator travel.
 
 Example:
-  python scripts/compare_hybrid_backends.py --input docs/roasts --limit 5
+  python scripts/compare_hybrid_backends.py --input path/to/alogs --limit 5
 """
 from __future__ import annotations
 

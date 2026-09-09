@@ -132,6 +132,11 @@ src/artisanlib/
   kaleido.py             # Kaleido WebSocket/serial protocol
   pid_control.py         # PID mode routing (incl. hybrid mode 5)
   canvas.py              # Sample loop integration
+
+scripts/
+  analyze_kaleido_alogs.py      # Phase / step-response summary from local .alog folders
+  fit_kaleido_model.py          # Fit KaleidoModelParams from .alog
+  compare_hybrid_backends.py    # Offline Energy vs MPC replay scoring
 ```
 
 ### Tests

@@ -11,7 +11,6 @@ import pytest
 from artisanlib.kaleido_model import KaleidoModelParams, step
 from artisanlib.kaleido_model_fit import (
     fit_params,
-    load_alog_dir,
     load_params_json,
     params_from_dict,
     params_to_dict,
@@ -78,20 +77,3 @@ class TestFitSynthetic:
         assert metrics['bt_rmse'] <= base['bt_rmse'] * 1.05 + 0.05
         # Fitted element tau should move toward truth vs default 15
         assert abs(fitted.tau_element - true.tau_element) < abs(wrong.tau_element - true.tau_element) + 2.0
-
-
-class TestCorpusOptional:
-    def test_load_roasts_dir_if_present(self) -> None:
-        roasts = pathlib.Path(__file__).resolve().parents[4] / 'docs' / 'roasts'
-        if not roasts.is_dir():
-            pytest.skip('docs/roasts missing')
-        traces = load_alog_dir(roasts, limit=3)
-        if not traces:
-            pytest.skip('no alogs with HP/FC')
-        m = replay_rmse(KaleidoModelParams(), traces, horizon_s=15.0, stride=10)
-        assert m['n'] > 0
-        assert math_isfinite(m['bt_rmse'])
-
-
-def math_isfinite(x: float) -> bool:
-    return x == x and abs(x) != float('inf')

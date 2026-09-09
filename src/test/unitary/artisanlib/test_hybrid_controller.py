@@ -2,10 +2,6 @@
 
 from __future__ import annotations
 
-import ast
-import math
-import pathlib
-
 import pytest
 
 from artisanlib.hybrid_controller import (
@@ -14,7 +10,6 @@ from artisanlib.hybrid_controller import (
     DEFAULT_CONTROL_BACKEND,
     DEFAULT_ET_BT_OFFSETS,
     DEFAULT_ROR_SHAPE,
-    EnergyBiasEstimator,
     EnergyController,
     HybridController,
     HybridControllerConfig,
@@ -29,8 +24,6 @@ from artisanlib.hybrid_controller import (
     normalize_control_backend,
     predict_ror,
 )
-
-ROASTS_DIR = pathlib.Path(__file__).resolve().parents[4] / 'docs' / 'roasts'
 
 
 @pytest.fixture
@@ -127,23 +120,6 @@ class TestRorAcceleration:
 
     def test_predict_ror(self) -> None:
         assert predict_ror(10.0, 0.2, 25.0) == pytest.approx(15.0)
-
-
-class TestEnergyBias:
-    def test_heater_raises_bias(self, config: HybridControllerConfig) -> None:
-        est = EnergyBiasEstimator(config)
-        for _ in range(20):
-            est.update(90.0, 20.0, 1.0)
-        assert est.bias > 0.0
-
-    def test_air_lowers_bias(self, config: HybridControllerConfig) -> None:
-        est = EnergyBiasEstimator(config)
-        for _ in range(20):
-            est.update(90.0, 20.0, 1.0)
-        high = est.bias
-        for _ in range(40):
-            est.update(20.0, 90.0, 1.0)
-        assert est.bias < high
 
 
 class TestThermalTwin:
@@ -318,114 +294,3 @@ class TestControllerBackend:
         assert normalize_control_backend('not-a-backend') == 'energy'
         ctrl = create_controller_backend('not-a-backend')
         assert ctrl.backend_name == 'energy'
-
-
-def _ror_series(timex: list[float], temp: list[float], window_s: float = 30.0) -> list[float]:
-    n = len(timex)
-    ror = [float('nan')] * n
-    j = 0
-    for i in range(n):
-        while j < i and timex[i] - timex[j] > window_s:
-            j += 1
-        if i == j:
-            continue
-        dt = timex[i] - timex[j]
-        if dt > 0:
-            ror[i] = (temp[i] - temp[j]) / dt * 60.0
-    return ror
-
-
-def _idx(ti: list[int], k: int) -> int | None:
-    return ti[k] if len(ti) > k and ti[k] and ti[k] > 0 else None
-
-
-def _replay_prediction_rmse(horizon_s: float = 30.0) -> tuple[float, float, int]:
-    """Open-loop twin vs accel-only RMSE predicting BT RoR horizon_s ahead."""
-    config = HybridControllerConfig()
-    twin_sq = 0.0
-    accel_sq = 0.0
-    n = 0
-    alogs = sorted(ROASTS_DIR.glob('*.alog'))
-    assert alogs, f'no roast logs in {ROASTS_DIR}'
-
-    for path in alogs:
-        if path.name.startswith('_'):
-            continue
-        data = ast.literal_eval(path.read_text(encoding='utf-8', errors='replace'))
-        timex = data['timex']
-        et = data['temp1']
-        bt = data['temp2']
-        hp = data['extratemp1'][0]
-        fc = data['extratemp2'][0]
-        ti = data['timeindex']
-        charge = _idx(ti, 0)
-        drop = _idx(ti, 6)
-        if charge is None or drop is None or drop <= charge + 40:
-            continue
-
-        bt_ror = _ror_series(timex, bt)
-        et_ror = _ror_series(timex, et)
-        twin = ThermalStateEstimator(config)
-        prev_bt_ror: float | None = None
-
-        for i in range(charge, drop):
-            if not math.isfinite(bt_ror[i]) or not math.isfinite(et_ror[i]):
-                prev_bt_ror = bt_ror[i] if math.isfinite(bt_ror[i]) else prev_bt_ror
-                continue
-            dt = timex[i] - timex[i - 1] if i > charge else 1.0
-            dt = max(0.05, dt)
-            accel = 0.0
-            if prev_bt_ror is not None and math.isfinite(prev_bt_ror):
-                accel = (bt_ror[i] - prev_bt_ror) / dt
-            phase = detect_roast_phase(
-                # progressive timeindex: only events that have occurred by index i
-                [
-                    charge if i >= charge else -1,
-                    ti[1] if len(ti) > 1 and ti[1] and i >= ti[1] else 0,
-                    ti[2] if len(ti) > 2 and ti[2] and i >= ti[2] else 0,
-                    ti[3] if len(ti) > 3 and ti[3] and i >= ti[3] else 0,
-                    0,
-                    0,
-                    0,
-                    0,
-                ],
-                bt[i],
-                config,
-            )
-            target = interpolate_ror_target(bt[i], phase, config)
-            state = twin.update(
-                bt[i], et[i], bt_ror[i], et_ror[i],
-                hp[i], fc[i], phase, dt, target_ror=target,
-            )
-            accel_pred = predict_ror(bt_ror[i], accel, horizon_s)
-
-            # Find sample ≈ horizon_s ahead
-            t_target = timex[i] + horizon_s
-            j = i
-            while j < drop and timex[j] < t_target:
-                j += 1
-            if j >= drop or not math.isfinite(bt_ror[j]):
-                prev_bt_ror = bt_ror[i]
-                continue
-            if abs(timex[j] - t_target) > 3.0:
-                prev_bt_ror = bt_ror[i]
-                continue
-
-            twin_sq += (state.pred_ror - bt_ror[j]) ** 2
-            accel_sq += (accel_pred - bt_ror[j]) ** 2
-            n += 1
-            prev_bt_ror = bt_ror[i]
-
-    assert n > 100, f'too few replay samples: {n}'
-    return math.sqrt(twin_sq / n), math.sqrt(accel_sq / n), n
-
-
-class TestTwinReplayGate:
-    def test_twin_beats_accel_only_on_m6_logs(self) -> None:
-        twin_rmse, accel_rmse, n = _replay_prediction_rmse(30.0)
-        # Gate from spec §5A: twin must beat accel-only before high twin authority
-        assert twin_rmse <= accel_rmse, (
-            f'twin RMSE {twin_rmse:.3f} should be <= accel RMSE {accel_rmse:.3f} (n={n})'
-        )
-        # Documented authority: twin_pred_blend default is elevated only when gate passes
-        assert HybridControllerConfig().twin_pred_blend >= 0.5

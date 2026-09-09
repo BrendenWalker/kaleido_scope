@@ -2,7 +2,7 @@
 """Fit Kaleido Lite thermal model params from Artisan .alog roast logs.
 
 Example:
-  python scripts/fit_kaleido_model.py --input docs/roasts --output docs/roasts/kaleido_model_m6.json
+  python scripts/fit_kaleido_model.py --input path/to/alogs --output kaleido_model_m6.json
 """
 from __future__ import annotations
 

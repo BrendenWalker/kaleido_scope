@@ -11,8 +11,8 @@ Status:
   (enable via QSetting `hybridControlBackend=mpc`; Energy remains default + fallback)
 - **Phase C (calibration):** done —
   [`kaleido_model_fit.py`](../src/artisanlib/kaleido_model_fit.py),
-  [`scripts/fit_kaleido_model.py`](../scripts/fit_kaleido_model.py),
-  fitted priors in [`docs/roasts/kaleido_model_m6.json`](roasts/kaleido_model_m6.json)
+  [`scripts/fit_kaleido_model.py`](../scripts/fit_kaleido_model.py)
+  (fitted M6 priors live in `KaleidoModelParams` defaults)
 - **Phase D (event-aware horizon):** done — phase propagation + FC air-first cost scales in `MPCBackend`
 - **Phase E (diagnostics/field):** done — Device Hybrid backend Energy|MPC, live `HybridDiagnostics`,
   [`scripts/compare_hybrid_backends.py`](../scripts/compare_hybrid_backends.py)
@@ -21,10 +21,11 @@ This is the **canonical** architecture and control-design document for Kaleido h
 `artisan_kaleido` fork. It consolidates the M6 RoR-shape Hybrid playbook, the two-level energy
 architecture, and the longer-term Model Predictive Control (MPC) backend.
 
-**Log refinement (2026-07):** schedule priors and plant-response notes draw from **23** Artisan
-`.alog` files under [`docs/roasts/`](roasts/) (~600 g Kaleido M6-class batches). Analysis helper:
-[`docs/roasts/_analyze_m6_logs.py`](roasts/_analyze_m6_logs.py). Twin replay helper/tests live under
-`src/test/unitary/artisanlib/`.
+**Log refinement (2026-07):** schedule priors and plant-response notes were derived from **23**
+operator Artisan `.alog` files (~600 g Kaleido M6-class). That corpus is no longer in-tree;
+re-run analysis on a local log folder with
+[`scripts/analyze_kaleido_alogs.py`](../scripts/analyze_kaleido_alogs.py). Twin / fit unit tests
+live under `src/test/unitary/artisanlib/`.
 
 ---
 
@@ -38,10 +39,12 @@ architecture, and the longer-term Model Predictive Control (MPC) backend.
 | `src/artisanlib/canvas.py` | Sample-loop hook; CHARGE → Hybrid entry |
 | `src/artisanlib/pid_control.py` | Hybrid mode (`externalPIDControl() == 5`) |
 | `src/artisanlib/main.py` | `buildHybridControllerConfig` / QSettings |
-| `src/artisanlib/kaleido.py` | HP/FC actuators via WebSocket/serial |
+| `src/artisanlib/kaleido.py` | HP/FC/RC/HS actuators via WebSocket/serial |
 | `src/test/unitary/artisanlib/test_hybrid_controller.py` | Unit tests for planner / energy law |
 | `src/test/unitary/artisanlib/test_mpc_controller.py` | Lite MPC plant + constraint + sim vs Energy |
-| `docs/roasts/*.alog` | Operator corpus used to refine schedules / τ priors |
+| `scripts/analyze_kaleido_alogs.py` | Offline phase / step-response analysis of `.alog` folders |
+| `scripts/fit_kaleido_model.py` | Fit `KaleidoModelParams` from `.alog` folders |
+| `scripts/compare_hybrid_backends.py` | Offline Energy vs MPC replay scoring |
 
 ---
 
@@ -203,7 +206,7 @@ Hybrid is intentionally **phased** so Machine PID owns drum warmup and Hybrid ow
 |---------|------|
 | Planner | `RoastPlanner` |
 | Thermal twin (Layer 1.5) | `ThermalStateEstimator` |
-| Energy Bias (derived) | scalar from twin states (legacy `EnergyBiasEstimator` API kept thin) |
+| Energy Bias (derived) | scalar from twin states (feeds FC boost / HP authority) |
 | Energy layer | `EnergyController` |
 | Facade for Artisan sample loop | `HybridController` |
 | Machine params | `MachineCharacteristics` |
@@ -253,7 +256,7 @@ pred_ror ≈ f(E_beans, E_air, E_drum, Moisture, phase)
 energy_bias ≈ weighted(E_drum, E_air, E_beans, -Moisture)   # feeds existing bias air / HP authority
 ```
 
-Quality bar: open-loop **15–30 s BT RoR prediction RMSE** on `docs/roasts/*.alog` must beat
+Quality bar: open-loop **15–30 s BT RoR prediction RMSE** on a local operator `.alog` set must beat
 accel-only linear extrapolation before raising twin influence on HP/FC (`twin_pred_blend`).
 
 Sensing caveats (§6A) still apply: BT probe contact noise; do not treat 1–3 s BT spikes as process.
@@ -384,7 +387,7 @@ Control implications:
 
 | M6 playbook | Controller mechanism |
 |-------------|---------------------|
-| Declining RoR (≈22→15→10→6) | Phase RoR **shape schedule** refined from `docs/roasts` BT-bin curve |
+| Declining RoR (≈22→15→10→6) | Phase RoR **shape schedule** refined from the M6 operator BT-bin curve |
 | Power schedule (90 → 80 → 50 → 40) | Phase **HP baseline** + modest RoR PID trim (±`heater_trim_limit`) |
 | Air rises modestly; soft-brake after FC | Phase **FC baseline** ~30→55 + ET−BT / crash / flick trim (authority to ~100) |
 | Prefer air over hard power cuts at FC | Low phase heater weight; HP lag 20–40 s → avoid late HP thrash |
@@ -821,7 +824,8 @@ Record a roast or monitoring session with PID/Hybrid off:
 ### 17.3 Validation / schedule data
 
 - Existing sanity fixtures: `src/test/sanity/data/kaleido/*.csv`
-- Operator corpus: `docs/roasts/*.alog` (23× ~600 g; schedule + τ priors in §6 / §6A)
+- Operator `.alog` folders (local; not in-repo): schedule + τ priors in §6 / §6A;
+  analyze with `scripts/analyze_kaleido_alogs.py --input <dir>`
 - Replay BT/ET/HP/FC through open-loop model; minimize prediction error over full roast
 
 ### 17.4 Optional offline tool
@@ -829,10 +833,10 @@ Record a roast or monitoring session with PID/Hybrid off:
 `scripts/fit_kaleido_model.py`:
 
 ```text
-python scripts/fit_kaleido_model.py --input roast.alog --output model.json
+python scripts/fit_kaleido_model.py --input path/to/alogs --output model.json
 ```
 
-Not part of initial MPC implementation; specified for Phase C.
+Also: `scripts/analyze_kaleido_alogs.py --input path/to/alogs` for phase / step-response summaries.
 
 ---
 
@@ -845,10 +849,10 @@ Not part of initial MPC implementation; specified for Phase C.
 | Refine schedule / priors from M6 `.alog` corpus | **Done** (documented §6 / §6A) |
 | Apply log-refined defaults + heater delay in code / tests | **Done** |
 | Thermal digital twin Layer 1.5 (Tier 1 heuristics) | **Done** |
-| Twin replay gate + raise `twin_pred_blend` | **Done** (corpus RMSE gate in tests) |
+| Twin replay gate + raise `twin_pred_blend` | **Done** (gate documented §5A; corpus no longer in-tree) |
 | **A** — `ControllerBackend` protocol; MPC stub delegates to Energy | **Done** |
 | **B** — Lite MPC + sim plant + unit tests | **Done** |
-| **C** — Model calibration from logs | **Done** (23× `.alog`; see `kaleido_model_m6.json`) |
+| **C** — Model calibration from logs | **Done** (priors baked into `KaleidoModelParams`) |
 | **D** — Event-aware horizon reference polish | **Done** |
 | **E** — Diagnostics UI + field A/B tuning | **Done** |
 | Machine profile YAML / UI presets (M1–M10) | Planned |
@@ -861,7 +865,7 @@ Not part of initial MPC implementation; specified for Phase C.
 | **0** | Spec consolidated + log-refined | Doc reviewed; schedule numbers trusted (§6) |
 | **A** | Backend protocol; stub → Energy | **Done** — `create_controller_backend` / `hybridControlBackend` |
 | **B** | Lite MPC + sim plant | **Done** — sim criterion + Energy timeout fallback |
-| **C** | Calibration from logs | **Done** — corpus fit; ET 15s RMSE 11.4→2.3 °C |
+| **C** | Calibration from logs | **Done** — fit script + baked `KaleidoModelParams` defaults |
 | **D** | Event-aware horizon | **Done** — event+BT phase; FC air-first weights |
 | **E** | Diagnostics + field A/B | **Done** — Device backend selector + offline A/B script |
 
@@ -889,7 +893,7 @@ Not part of initial MPC implementation; specified for Phase C.
 
 ### 19.3 Replay tests
 
-- Feed recorded BT/ET/HP/FC from sanity CSVs and `docs/roasts/*.alog`
+- Feed recorded BT/ET/HP/FC from sanity CSVs and local operator `.alog` folders
 - Open-loop: compare one-step-ahead predictions to measured BT/ET
 - Report RMSE vs calibrated and default parameters
 
@@ -931,7 +935,7 @@ Not part of initial MPC implementation; specified for Phase C.
 - Background alignment helpers: `canvas.timealign()`, `alignEvent` in Background dialog
 - Kaleido protocol: `src/artisanlib/kaleido.py` (HP, FC tags)
 - SciPy optimization: https://docs.scipy.org/doc/scipy/reference/optimize.html
-- M6 roast log corpus + analysis: `docs/roasts/`, `docs/roasts/_analyze_m6_logs.py`
+- M6 log analysis (local folders): `scripts/analyze_kaleido_alogs.py`
 
 ---
 

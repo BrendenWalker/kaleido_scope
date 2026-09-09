@@ -156,10 +156,7 @@ class HybridControllerConfig:
     soft_brake_hp_gain: float = 2.5
     # Require at least this RoR accel (°C/min per s) before muting an overshoot
     min_decline_accel: float = -0.4
-    # Legacy energy bias weights (fallback / EnergyBiasEstimator)
-    energy_heater_weight: float = 0.02
-    energy_air_weight: float = 0.015
-    energy_leak: float = 0.05
+    # Twin energy_bias → actuator authority
     energy_bias_fc_gain: float = 8.0
     energy_bias_hp_scale: float = 0.15
     # Twin gains
@@ -406,27 +403,6 @@ class ThermalStateEstimator:
             1.5,
         )
         return s
-
-
-class EnergyBiasEstimator:
-    """Legacy scalar energy integrator (fallback / unit-test compatibility)."""
-
-    __slots__ = ('config', 'bias')
-
-    def __init__(self, config: HybridControllerConfig) -> None:
-        self.config = config
-        self.bias = 0.0
-
-    def reset(self) -> None:
-        self.bias = 0.0
-
-    def update(self, hp: float, fc: float, dt: float) -> float:
-        self.bias += self.config.energy_heater_weight * (hp / 100.0) * dt
-        self.bias -= self.config.energy_air_weight * (fc / 100.0) * dt
-        decay = max(0.0, 1.0 - self.config.energy_leak * dt)
-        self.bias *= decay
-        self.bias = _clip(self.bias, -1.5, 1.5)
-        return self.bias
 
 
 # ---------------------------------------------------------------------------
