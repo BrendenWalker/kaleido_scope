@@ -177,6 +177,7 @@ if TYPE_CHECKING:
     from artisanlib.bluedot import BlueDOT # pylint: disable=unused-import
     from artisanlib.mugma import Mugma # pylint: disable=unused-import
     from artisanlib.kaleido import KaleidoPort # pylint: disable=unused-import
+    from artisanlib.hybrid_controller import HybridController, HybridControllerConfig, create_controller_backend # pylint: disable=unused-import
     from artisanlib.orbiter import Orbiter # pylint: disable=unused-import
     from artisanlib.phases_canvas import tphasescanvas # pylint: disable=unused-import
     try:
@@ -209,11 +210,20 @@ from artisanlib.util import (appFrozen, uchr, decodeLocal, decodeLocalStrict, en
         fromFtoCstrict, fromCtoFstrict, RoRfromFtoCstrict, RoRfromCtoFstrict,
         convertRoR, convertRoRstrict, convertTemp, path2url, toInt, toString, toList, toFloat,
         toBool, toStringList, removeAll, application_name, application_viewer_name, application_organization_name,
-        application_organization_domain, application_desktop_file_name, getDataDirectory, getDocumentsDirectory, getAppPath, getResourcePath, debugLogLevelToggle,
+        application_organization_domain, official_application_organization_name, official_application_organization_domain,
+        application_desktop_file_name, getDataDirectory, getDocumentsDirectory, getAppPath, getResourcePath, debugLogLevelToggle,
         debugLogLevelActive, setDebugLogLevel, createGradient, natsort, setDeviceDebugLogLevel,
         comma2dot, is_proper_temp, weight_units, volume_units, float2float, float2str,
         convertWeight, convertVolume, rgba_colorname2argb_colorname, render_weight, serialize, deserialize, csv_load, exportProfile2CSV, findTPint,
         eventtime2string, toDim)
+
+from artisanlib.hybrid_controller import (
+    DEFAULT_CONTROL_BACKEND,
+    HybridController,
+    HybridControllerConfig,
+    create_controller_backend,
+    normalize_control_backend,
+)
 
 from artisanlib.qtsingleapplication import QtSingleApplication
 
@@ -532,10 +542,14 @@ if sys.platform.startswith('linux'):
 app = Artisan(app_args)
 
 
-# On the first run if there are legacy settings under "YourQuest" but no new settings under "artisan-scope" then the legacy settings
-# will be copied to the new settings location. Once settings exist under "artisan-scope" the legacy settings under "YourQuest" will
-# no longer be read or saved.  At start-up, versions of Artisan before to v2.0 will no longer share settings with versions v2.0 and after.
-# Settings can be shared among all versions of Artisan by explicitly saving and loading them using Help>Save/Load Settings.
+# On the first run if there are legacy settings under "YourQuest" but no new settings under "artisan-kaleido" then the legacy settings
+# will be copied to the new settings location. Once settings exist under "artisan-kaleido" the legacy settings under "YourQuest" will
+# no longer be read or saved.
+#
+# If no settings exist under "artisan-kaleido" but settings exist under official upstream "artisan-scope", those settings are copied
+# once on first start. After that this build only reads and writes "artisan-kaleido" settings so Kaleido-specific keys
+# (e.g. kaleidoHybridControl) are not written to official Artisan when switching versions.
+# Settings can be shared explicitly using Help>Save/Load Settings.
 
 settingsRelocated:bool = False
 try:
@@ -569,6 +583,43 @@ try:
             newsettings.setValue(key,legacysettings.value(key))
     del legacysettings   #free up memory?
     del newsettings      #free up memory?
+except Exception: # pylint: disable=broad-except
+    pass
+
+try:
+    def _copy_qsettings(source:QSettings, dest:QSettings) -> None:
+        for key in source.allKeys():
+            dest.setValue(key, source.value(key))
+
+    def _open_qsettings(org:str, domain:str, app_name:str) -> QSettings:
+        saved_app_name = app.applicationName()
+        saved_org = app.organizationName()
+        saved_domain = app.organizationDomain()
+        app.setOrganizationName(org)
+        app.setOrganizationDomain(domain)
+        app.setApplicationName(app_name)
+        settings = QSettings()
+        app.setApplicationName(saved_app_name)
+        app.setOrganizationName(saved_org)
+        app.setOrganizationDomain(saved_domain)
+        return settings
+
+    kaleido_settings = _open_qsettings(application_organization_name, application_organization_domain, application_name)
+    official_settings = _open_qsettings(official_application_organization_name, official_application_organization_domain, application_name)
+
+    if not kaleido_settings.contains('Mode') and official_settings.contains('Mode'):
+        settingsRelocated = True
+        _copy_qsettings(official_settings, kaleido_settings)
+
+    kaleido_viewer_settings = _open_qsettings(application_organization_name, application_organization_domain, application_viewer_name)
+    official_viewer_settings = _open_qsettings(official_application_organization_name, official_application_organization_domain, application_viewer_name)
+    if not kaleido_viewer_settings.contains('Mode') and official_viewer_settings.contains('Mode'):
+        _copy_qsettings(official_viewer_settings, kaleido_viewer_settings)
+
+    del kaleido_settings
+    del official_settings
+    del kaleido_viewer_settings
+    del official_viewer_settings
 except Exception: # pylint: disable=broad-except
     pass
 
@@ -1338,7 +1389,10 @@ class ApplicationWindow(QMainWindow):
         'seriallog', 'ser', 'modbus', 'extraMODBUStemps', 'extraMODBUStx', 's7', 'extraS7tx', 'ws', 'extraser', 'extracomport', 'extrabaudrate',
         'extrabytesize', 'extraparity', 'extrastopbits', 'extratimeout', 'hottop', 'santokerHost', 'santokerPort', 'santokerSerial', 'santokerBLE', 'santokerEventFlags', 'santoker', 'santokerR', 'lebrew_roastseeNEXT', 'thermoworksBlueDOT', 'fujipid', 'dtapid', 'pidcontrol', 'soundflag', 'recentRoasts', 'maxRecentRoasts',
         'mugmaHost','mugmaPort', 'mugma', 'mugma_default_host', 'shelly_3EMPro_host', 'shelly_PlusPlug_host',
-        'kaleido_default_host', 'kaleidoHost', 'kaleidoPort', 'kaleidoSerial', 'kaleidoPID', 'kaleido', 'kaleidoEventFlags', 'colorTrack_mean_window_size', 'colorTrack_median_window_size', 'ikawa',
+        'kaleido_default_host', 'kaleidoHost', 'kaleidoPort', 'kaleidoSerial', 'kaleidoPID', 'kaleidoHybridControl',
+        'hybridControlBackend', 'hybridHeaterKp', 'hybridHeaterKi', 'hybridHeaterKd', 'hybridFanKp', 'hybridFanKi', 'hybridFanKd',
+        'hybridHeaterSlew', 'hybridFanSlew', 'hybridRorAccelGain', 'hybridHeaterTrimLimit', 'hybridCrashRorMargin', 'hybridCrashFcGain',
+        'hybrid_controller', 'kaleido', 'kaleidoEventFlags', 'colorTrack_mean_window_size', 'colorTrack_median_window_size', 'ikawa',
         'lcdpaletteB', 'lcdpaletteF', 'extraeventsbuttonsflags', 'extraeventslabels', 'extraeventbuttoncolor', 'extraeventsactionstrings',
         'extraeventbuttonround', 'block_quantification_sampling_ticks', 'sampling_seconds_to_block_quantifiction', 'sampling_ticks_to_block_quantifiction', 'extraeventsactionslastvalue',
         'org_extradevicesettings', 'eventslidervalues', 'eventslidervisibilities', 'eventsliderKeyboardControl', 'eventsliderAlternativeLayout_default',
@@ -1363,8 +1417,8 @@ class ApplicationWindow(QMainWindow):
         'button_font_size_tiny', 'button_font_size_micro',
         'pushbuttonstyles_simulator', 'pushbuttonstyles', 'standard_button_tiny_height', 'standard_button_small_height', 'standard_button_height',
         'buttonONOFF', 'buttonSTARTSTOP', 'buttonFCs', 'buttonFCe', 'buttonSCs', 'buttonSCe', 'buttonRESET', 'buttonCHARGE', 'buttonDROP',
-        'buttonCONTROL', 'buttonEVENT', 'buttonSVp5', 'buttonSVp10', 'buttonSVp20', 'buttonSVm20', 'buttonSVm10', 'buttonSVm5', 'buttonDRY',
-        'buttonCOOL', 'lcd1', 'lcd2', 'lcd3', 'lcd4', 'lcd5',
+        'buttonCONTROL', 'buttonCOOLDOWN', 'buttonEVENT', 'buttonSVp5', 'buttonSVp10', 'buttonSVp20', 'buttonSVm20', 'buttonSVm10', 'buttonSVm5', 'buttonDRY',
+        'buttonCOOL', 'lcd1', 'lcd2', 'lcd3', 'lcd4', 'lcd5', 'kaleidoCooldownActive',
         'lcd6', 'lcd7', 'label2', 'label3', 'label4', 'label5', 'label6', 'label7', 'extraLCD1', 'extraLCD2', 'extraLCDlabel1', 'extraLCDlabel2',
         'extraLCDframe1', 'extraLCDframe2', 'extraLCDvisibility1', 'extraLCDvisibility2', 'extraCurveVisibility1', 'extraCurveVisibility2',
         'extraDelta1', 'extraDelta2', 'extraFill1', 'extraFill2', 'channel_tare_values', 'messagehist', 'eventlabel', 'eNumberSpinBox',
@@ -1694,8 +1748,28 @@ class ApplicationWindow(QMainWindow):
         self.kaleidoPort:int = 80
         self.kaleidoSerial:bool = False # if True connection is via the main serial port
         self.kaleidoPID:bool = True # if True the external Kaleido PID is operated, otherwise the internal Artisan PID is active
+        self.kaleidoHybridControl:bool = False # if True the Hybrid Heater+Fan controller is active (mutually exclusive with kaleidoPID)
         self.kaleido:KaleidoPort|None = None # holds the Kaleido instance created on connect; reset to None on disconnect
         self.kaleidoEventFlags:list[bool] = [False, False, False, False, False, False, False ] # CHARGE, DRY, FCs, FCe, SCs, SCe, DROP
+        self.kaleidoCooldownActive:bool = False # idle air/drum cooldown until BT < 50°C
+
+        # Hybrid Controller settings
+        self.hybridControlBackend:str = DEFAULT_CONTROL_BACKEND  # "energy" | "mpc"
+        self.hybridHeaterKp:float = 3.0
+        self.hybridHeaterKi:float = 0.5
+        self.hybridHeaterKd:float = 0.1
+        self.hybridFanKp:float = 2.0
+        self.hybridFanKi:float = 0.3
+        self.hybridFanKd:float = 0.05
+        self.hybridHeaterSlew:float = 5.0
+        self.hybridFanSlew:float = 20.0
+        self.hybridRorAccelGain:float = 2.0
+        self.hybridHeaterTrimLimit:float = 20.0
+        self.hybridCrashRorMargin:float = 1.5
+        self.hybridCrashFcGain:float = 4.0
+        self.hybrid_controller:HybridController = create_controller_backend(
+            self.hybridControlBackend, self.buildHybridControllerConfig())
+        self.hybridDiagnostics:object|None = None  # latest HybridDiagnostics from sample loop
 
         # Orbiter
         self.orbiter:Orbiter|None = None # holds the Orbiter instance created on connect; reset to None on disconnect
@@ -3000,6 +3074,18 @@ class ApplicationWindow(QMainWindow):
         if self.app.artisanviewerMode:
             self.buttonCONTROL.setVisible(False)
 
+        # Kaleido idle cooldown (visible only when ON + not recording)
+        self.buttonCOOLDOWN: QPushButton = QPushButton(QApplication.translate('Button', 'COOLDOWN'))
+        self.buttonCOOLDOWN.setFocusPolicy(Qt.FocusPolicy.NoFocus)
+        self.buttonCOOLDOWN.setStyleSheet(self.pushbuttonstyles['PID'])
+        self.buttonCOOLDOWN.setGraphicsEffect(self.makeShadow())
+        self.buttonCOOLDOWN.setCursor(QCursor(Qt.CursorShape.PointingHandCursor))
+        self.buttonCOOLDOWN.setMinimumHeight(self.standard_button_height)
+        self.buttonCOOLDOWN.setToolTip(QApplication.translate(
+            'Tooltip', 'Cool beans: air 100%, drum 10% until BT < 50°C, then all off'))
+        self.buttonCOOLDOWN.clicked.connect(self.toggleKaleidoCooldown)
+        self.buttonCOOLDOWN.setVisible(False)
+
         #create EVENT record button
         self.buttonEVENT: AuxEventPushButton = AuxEventPushButton(QApplication.translate('Button', 'EVENT'))
         self.buttonEVENT.setToolTip(QApplication.translate('Tooltip', 'Event'))
@@ -3655,6 +3741,8 @@ class ApplicationWindow(QMainWindow):
         self.level1layout.addSpacing(15)
         self.level1layout.addWidget(self.buttonCONTROL)
         self.level1layout.addSpacing(10)
+        self.level1layout.addWidget(self.buttonCOOLDOWN)
+        self.level1layout.addSpacing(10)
         self.level1layout.addWidget(self.lcd1)
         self.level1layout.setSpacing(0)
         self.level1layout.setContentsMargins(0,7,7,12) # left, top, right, bottom
@@ -3957,12 +4045,11 @@ class ApplicationWindow(QMainWindow):
 #        # provide information message to user about sharing settings at start-up
         if settingsRelocated:
             string =  QApplication.translate('Message','Welcome to version {0} of Artisan!').format(__version__) + '\n\n'
-            string += QApplication.translate('Message','This is a one time message to inform you about a change in Artisan.') + '\n\n'
-            string += QApplication.translate('Message','If you never run older versions of Artisan you can skip this message, the change does not affect you.') + '  '
-            string += QApplication.translate('Message','Artisan preserves all your configuration settings when you exit so they will automatically be available the next time you start Artisan.') + '  '
-            string += QApplication.translate('Message','Beginning with release v2.0, settings will no longer be automatically shared at start-up with versions before v2.0.') + '\n\n'
-            string += QApplication.translate('Message','Do not worry. Since this is the first time you opened this new version Artisan has already loaded your last used settings.') + '\n\n'
-            string += QApplication.translate('Message',"To share settings between this version and Artisan versions before v2.0 use 'Help>Save Settings' and 'Help>Load Settings'.") + '\n\n'
+            string += QApplication.translate('Message','This is a one time message to inform you about a change in Artisan Kaleido.') + '\n\n'
+            string += QApplication.translate('Message','Artisan Kaleido stores settings separately from official Artisan so Kaleido-specific options do not affect upstream Artisan when switching between versions.') + '  '
+            string += QApplication.translate('Message','Artisan preserves all your configuration settings when you exit so they will automatically be available the next time you start Artisan.') + '\n\n'
+            string += QApplication.translate('Message','Do not worry. Since this is the first time you opened Artisan Kaleido it has already loaded your last used settings from official Artisan.') + '\n\n'
+            string += QApplication.translate('Message',"To share settings between Artisan Kaleido and official Artisan use 'Help>Save Settings' and 'Help>Load Settings'.") + '\n\n'
             string += QApplication.translate('Message','Enjoy using Artisan, The Artisan Team')
             QMessageBox.information(self, QApplication.translate('Message','One time message about loading settings at start-up'),string)
 
@@ -17292,6 +17379,22 @@ class ApplicationWindow(QMainWindow):
             self.santoker.send_msg(target,value)
 
 
+    def buildHybridControllerConfig(self) -> 'HybridControllerConfig':
+        return HybridControllerConfig(
+            heater_kp=self.hybridHeaterKp,
+            heater_ki=self.hybridHeaterKi,
+            heater_kd=self.hybridHeaterKd,
+            fan_kp=self.hybridFanKp,
+            fan_ki=self.hybridFanKi,
+            fan_kd=self.hybridFanKd,
+            heater_slew_pct_per_sec=self.hybridHeaterSlew,
+            fan_slew_pct_per_sec=self.hybridFanSlew,
+            ror_accel_gain=self.hybridRorAccelGain,
+            heater_trim_limit=self.hybridHeaterTrimLimit,
+            crash_ror_margin=self.hybridCrashRorMargin,
+            crash_fc_gain=self.hybridCrashFcGain,
+        )
+
     # kaleidoSendMessage() just sends out the message to the machine without waiting for a response
     @pyqtSlot(str,str)
     def kaleidoSendMessage(self, target:str, value:str) -> None:
@@ -17370,6 +17473,9 @@ class ApplicationWindow(QMainWindow):
                                     self.setExtraEventButtonStyleSignal.emit(lastbuttonpressed, 'pressed')
                                 else:
                                     self.setExtraEventButtonStyleSignal.emit(lastbuttonpressed, 'normal')
+                                # Start Heating (HS ON): enable Machine PID warmup in Hybrid pre-CHARGE phase
+                                if target == 'HS':
+                                    self.kaleidoStartHeating(bv)
                         elif etype>-1:
                             new_value = int(round(float(res)))
                             self.addEventSignal.emit(new_value, etype, True, False, False)
@@ -17379,6 +17485,109 @@ class ApplicationWindow(QMainWindow):
                 if etype == -1 and len(self.buttonlist)>lastbuttonpressed > -1:
                     # we unblock all signals emitted from this button until we received a response
                     self.buttonlist[lastbuttonpressed].blockSignals(False)
+
+    # When Start Heating turns ON during Hybrid pre-CHARGE, enable Machine PID warmup (SV→TS).
+    # Turning heating OFF does not change PID state (avoids surprising the operator mid-warmup).
+    def kaleidoStartHeating(self, on:bool) -> None:
+        if not on:
+            return
+        if self.kaleido is not None:
+            # Keep HS latched when automation believes heating should be on
+            self.kaleido.ensureHeating(True)
+        if (self.kaleidoHybridControl and self.qmc.Controlbuttonflag
+                and self.kaleido is not None
+                and self.pidcontrol.kaleidoInWarmupPhase()
+                and not self.pidcontrol.pidActive):
+            self.pidcontrol.pidOn()
+
+    # --- Kaleido idle cooldown (air 100% / drum 10% until BT < 50°C) ---
+
+    def kaleidoCooldownAvailable(self) -> bool:
+        """True when Kaleido is connected/monitoring but not recording a profile."""
+        return (
+            self.qmc.device == 138
+            and self.kaleido is not None
+            and self.qmc.flagon
+            and not self.qmc.flagstart
+        )
+
+    def updateKaleidoCooldownButton(self) -> None:
+        if self.app.artisanviewerMode:
+            self.buttonCOOLDOWN.setVisible(False)
+            return
+        show = self.kaleidoCooldownAvailable() or self.kaleidoCooldownActive
+        self.buttonCOOLDOWN.setVisible(show)
+        if self.kaleidoCooldownActive:
+            self.buttonCOOLDOWN.setStyleSheet(self.pushbuttonstyles['PIDactive'])
+            self.buttonCOOLDOWN.setText(QApplication.translate('Button', 'COOLING…'))
+        else:
+            self.buttonCOOLDOWN.setStyleSheet(self.pushbuttonstyles['PID'])
+            self.buttonCOOLDOWN.setText(QApplication.translate('Button', 'COOLDOWN'))
+
+    @pyqtSlot(bool)
+    @pyqtSlot()
+    def toggleKaleidoCooldown(self, _:bool = False) -> None:
+        if self.kaleidoCooldownActive:
+            self.stopKaleidoCooldown(turn_off=True)
+            self.sendmessage(QApplication.translate('Message', 'Kaleido cooldown cancelled — controls off'))
+            return
+        if not self.kaleidoCooldownAvailable():
+            self.sendmessage(QApplication.translate(
+                'Message', 'Cooldown available only while connected and idle (ON, not recording)'))
+            return
+        self.startKaleidoCooldown()
+
+    def startKaleidoCooldown(self) -> None:
+        if self.kaleido is None:
+            return
+        # Leave any active PID/Hybrid control before commanding cooldown actuators
+        try:
+            if self.pidcontrol.pidActive:
+                self.pidcontrol.pidOff()
+        except Exception as e:  # pylint: disable=broad-except
+            _log.exception(e)
+        self.kaleidoCooldownActive = True
+        self.kaleido.applyCooldownActuators()
+        # Sync preset sliders: 0=FC, 1=RC, 3=HP
+        self.addRawEventSignal.emit(100, 100.0, 0, False, True, False)
+        self.addRawEventSignal.emit(10, 10.0, 1, False, True, False)
+        self.addRawEventSignal.emit(0, 0.0, 3, False, True, False)
+        self.updateKaleidoCooldownButton()
+        self.sendmessage(QApplication.translate(
+            'Message', 'Kaleido cooldown: air 100%, drum 10% until BT < 50°C'))
+
+    def tickKaleidoCooldown(self, bt: float) -> None:
+        """Sample-loop tick: hold cooldown actuators until BT target, then shut down."""
+        if not self.kaleidoCooldownActive or self.kaleido is None:
+            return
+        # Abort if recording started or connection dropped mid-cooldown
+        if self.qmc.flagstart or not self.qmc.flagon:
+            self.stopKaleidoCooldown(turn_off=True)
+            return
+        try:
+            from artisanlib.util import fromCtoFstrict
+            threshold = 50.0 if self.qmc.mode == 'C' else float(fromCtoFstrict(50.0))
+            if bt is not None and bt > -1 and bt < threshold:
+                self.stopKaleidoCooldown(turn_off=True)
+                self.sendmessage(QApplication.translate(
+                    'Message', 'Kaleido cooldown complete — all controls off'))
+                return
+            self.kaleido.applyCooldownActuators()
+        except Exception as e:  # pylint: disable=broad-except
+            _log.exception(e)
+
+    def stopKaleidoCooldown(self, turn_off: bool = True) -> None:
+        was_active = self.kaleidoCooldownActive
+        self.kaleidoCooldownActive = False
+        if turn_off and self.kaleido is not None and was_active:
+            try:
+                self.kaleido.allControlsOff()
+                self.addRawEventSignal.emit(0, 0.0, 0, False, True, False)
+                self.addRawEventSignal.emit(0, 0.0, 1, False, True, False)
+                self.addRawEventSignal.emit(0, 0.0, 3, False, True, False)
+            except Exception as e:  # pylint: disable=broad-except
+                _log.exception(e)
+        self.updateKaleidoCooldownButton()
 
     # removes window geometry and splitter settings from the given settings
     @staticmethod
@@ -17604,6 +17813,25 @@ class ApplicationWindow(QMainWindow):
             self.kaleidoPort = toInt(settings.value('kaleidoPort',self.kaleidoPort))
             self.kaleidoSerial = toBool(settings.value('kaleidoSerial',self.kaleidoSerial))
             self.kaleidoPID = toBool(settings.value('kaleidoPID',self.kaleidoPID))
+            self.kaleidoHybridControl = toBool(settings.value('kaleidoHybridControl',self.kaleidoHybridControl))
+            if self.kaleidoHybridControl:
+                self.kaleidoPID = False
+            self.hybridControlBackend = normalize_control_backend(
+                toString(settings.value('hybridControlBackend', self.hybridControlBackend)))
+            self.hybridHeaterKp = toFloat(settings.value('hybridHeaterKp',self.hybridHeaterKp))
+            self.hybridHeaterKi = toFloat(settings.value('hybridHeaterKi',self.hybridHeaterKi))
+            self.hybridHeaterKd = toFloat(settings.value('hybridHeaterKd',self.hybridHeaterKd))
+            self.hybridFanKp = toFloat(settings.value('hybridFanKp',self.hybridFanKp))
+            self.hybridFanKi = toFloat(settings.value('hybridFanKi',self.hybridFanKi))
+            self.hybridFanKd = toFloat(settings.value('hybridFanKd',self.hybridFanKd))
+            self.hybridHeaterSlew = toFloat(settings.value('hybridHeaterSlew',self.hybridHeaterSlew))
+            self.hybridFanSlew = toFloat(settings.value('hybridFanSlew',self.hybridFanSlew))
+            self.hybridRorAccelGain = toFloat(settings.value('hybridRorAccelGain',self.hybridRorAccelGain))
+            self.hybridHeaterTrimLimit = toFloat(settings.value('hybridHeaterTrimLimit',self.hybridHeaterTrimLimit))
+            self.hybridCrashRorMargin = toFloat(settings.value('hybridCrashRorMargin',self.hybridCrashRorMargin))
+            self.hybridCrashFcGain = toFloat(settings.value('hybridCrashFcGain',self.hybridCrashFcGain))
+            self.hybrid_controller = create_controller_backend(
+                self.hybridControlBackend, self.buildHybridControllerConfig())
             if settings.contains('kaleidoEventFlags'):
                 self.kaleidoEventFlags = [toBool(x) for x in toList(settings.value('kaleidoEventFlags',self.kaleidoEventFlags))]
             self.mugmaHost = toString(settings.value('mugmaHost',self.mugmaHost))
@@ -19627,6 +19855,20 @@ class ApplicationWindow(QMainWindow):
             self.settingsSetValue(settings, default_settings, 'kaleidoPort',self.kaleidoPort, read_defaults)
             self.settingsSetValue(settings, default_settings, 'kaleidoSerial',self.kaleidoSerial, read_defaults)
             self.settingsSetValue(settings, default_settings, 'kaleidoPID',self.kaleidoPID, read_defaults)
+            self.settingsSetValue(settings, default_settings, 'kaleidoHybridControl',self.kaleidoHybridControl, read_defaults)
+            self.settingsSetValue(settings, default_settings, 'hybridControlBackend',self.hybridControlBackend, read_defaults)
+            self.settingsSetValue(settings, default_settings, 'hybridHeaterKp',self.hybridHeaterKp, read_defaults)
+            self.settingsSetValue(settings, default_settings, 'hybridHeaterKi',self.hybridHeaterKi, read_defaults)
+            self.settingsSetValue(settings, default_settings, 'hybridHeaterKd',self.hybridHeaterKd, read_defaults)
+            self.settingsSetValue(settings, default_settings, 'hybridFanKp',self.hybridFanKp, read_defaults)
+            self.settingsSetValue(settings, default_settings, 'hybridFanKi',self.hybridFanKi, read_defaults)
+            self.settingsSetValue(settings, default_settings, 'hybridFanKd',self.hybridFanKd, read_defaults)
+            self.settingsSetValue(settings, default_settings, 'hybridHeaterSlew',self.hybridHeaterSlew, read_defaults)
+            self.settingsSetValue(settings, default_settings, 'hybridFanSlew',self.hybridFanSlew, read_defaults)
+            self.settingsSetValue(settings, default_settings, 'hybridRorAccelGain',self.hybridRorAccelGain, read_defaults)
+            self.settingsSetValue(settings, default_settings, 'hybridHeaterTrimLimit',self.hybridHeaterTrimLimit, read_defaults)
+            self.settingsSetValue(settings, default_settings, 'hybridCrashRorMargin',self.hybridCrashRorMargin, read_defaults)
+            self.settingsSetValue(settings, default_settings, 'hybridCrashFcGain',self.hybridCrashFcGain, read_defaults)
             self.settingsSetValue(settings, default_settings, 'kaleidoEventFlags',self.kaleidoEventFlags, read_defaults)
             self.settingsSetValue(settings, default_settings, 'mugmaHost',self.mugmaHost, read_defaults)
             self.settingsSetValue(settings, default_settings, 'mugmaPort',self.mugmaPort, read_defaults)
