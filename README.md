@@ -1,4 +1,4 @@
-# Artisan Kaleido
+# Kaleido Scope
 
 Artisan fork tailored for **Kaleido hybrid electric/convection roasters**, with coordinated heater and airflow control.
 
@@ -160,6 +160,14 @@ pytest src/test/unitary/artisanlib/test_pid_control.py -v -k kaleido
 - Machine profile presets (M1–M10) and schedule editor UI
 - Live diagnostic curves (commanded HP/FC, phase, Energy Bias, predicted RoR)
 - Drum speed (RC) coordination
+
+## Help Fund Artisan Scope
+
+Kaleido Scope stands on [Artisan](https://github.com/artisan-roaster-scope/artisan). If this software is useful to you, please support the people who built and still maintain that project:
+
+**[Donate to Artisan Scope](https://artisan-scope.org/donate/)**
+
+Thank you to the Artisan Scope team for years of open-source work. This fork would not exist without them.
 
 ## License
 

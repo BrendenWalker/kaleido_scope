@@ -32,29 +32,26 @@
       <li>user defined buttons and slidersg with programmable actions</li>
       <li>many import and export formats like Aillio Roastime, Cropster XLS, Giesen CSV, IKAWA CSV, Probat Pilot, RoastLogger, RoastLog, RoastPath,..</li>
     </ul>
-
-    <p>The Artisan project runs on donations from individuals and companies recognising the value of Artisan for their work or leisure. Consider supporting this project with your donation, or even better, purchase an artisan.plus membership!</p>
   </description>
 
   <developer id="org.artisan-scope">
     <name>Artisan developers</name>
   </developer>
 
-  <url type="bugtracker">https://github.com/artisan-roaster-scope/artisan/issues</url>
-  <url type="homepage">https://artisan-scope.org/</url>
-  <url type="donation">https://artisan-scope.org/donate/</url>
+  <url type="bugtracker">https://github.com/BrendenWalker/kaleido_scope/issues</url>
+  <url type="homepage">https://github.com/BrendenWalker/kaleido_scope</url>
   <url type="contact">https://artisan-roasterscope.blogspot.com/p/contact-me.html</url>
-  <url type="faq">https://artisan-scope.org/help/#faq</url>
-  <url type="vcs-browser">https://github.com/artisan-roaster-scope/artisan</url>
+  <url type="faq">https://github.com/BrendenWalker/kaleido_scope</url>
+  <url type="vcs-browser">https://github.com/BrendenWalker/kaleido_scope</url>
 
   <launchable type="desktop-id">org.artisan_scope.artisan.desktop</launchable>
   <screenshots>
     <screenshot type="default">
-      <image>https://github.com/artisan-roaster-scope/artisan/blob/2c94e7d03f51221771a6f5e10c3a55fd1a26e744/wiki/screenshots/artisan-cover.png?raw=true</image>
+      <image>https://github.com/BrendenWalker/kaleido_scope/blob/2c94e7d03f51221771a6f5e10c3a55fd1a26e744/wiki/screenshots/artisan-cover.png?raw=true</image>
       <caption>Main window of the application</caption>
     </screenshot>
     <screenshot>
-      <image>https://github.com/artisan-roaster-scope/artisan/blob/2c94e7d03f51221771a6f5e10c3a55fd1a26e744/wiki/screenshots/artisan-cover2.png?raw=true</image>
+      <image>https://github.com/BrendenWalker/kaleido_scope/blob/2c94e7d03f51221771a6f5e10c3a55fd1a26e744/wiki/screenshots/artisan-cover2.png?raw=true</image>
       <caption>Main window with custom event buttons</caption>
     </screenshot>
   </screenshots>
@@ -71,7 +68,7 @@
   <releases>
 
      <release version="4.0.2" date="2026-02-07">
-      <url type="details">https://github.com/artisan-roaster-scope/artisan/releases/tag/v4.0.2</url>
+      <url type="details">https://github.com/BrendenWalker/kaleido_scope/releases/tag/v4.0.2</url>
       <description>
         <p>CHANGES</p>
         <ul>
@@ -88,7 +85,7 @@
     </release>
 
     <release version="4.0.0" date="2026-01-27">
-      <url type="details">https://github.com/artisan-roaster-scope/artisan/releases/tag/v4.0.0</url>
+      <url type="details">https://github.com/BrendenWalker/kaleido_scope/releases/tag/v4.0.0</url>
       <description>
         <p>ADDITIONS</p>
         <ul>
@@ -125,7 +122,7 @@
     </release>
 
     <release version="3.4.0" date="2025-10-11">
-      <url type="details">https://github.com/artisan-roaster-scope/artisan/releases/tag/v3.4.0</url>
+      <url type="details">https://github.com/BrendenWalker/kaleido_scope/releases/tag/v3.4.0</url>
       <description>
         <p>ADDITIONS</p>
         <ul>
@@ -208,7 +205,7 @@
     </release>
 
     <release version="3.2.0" date="2025-06-23">
-      <url type="details">https://github.com/artisan-roaster-scope/artisan/releases/tag/v3.2.0</url>
+      <url type="details">https://github.com/BrendenWalker/kaleido_scope/releases/tag/v3.2.0</url>
       <description>
         <p>ADDITIONS</p>
         <ul>
@@ -243,7 +240,7 @@
     </release>
 
     <release version="3.1.4" date="2025-05-01">
-      <url type="details">https://github.com/artisan-roaster-scope/artisan/releases/tag/v3.1.4</url>
+      <url type="details">https://github.com/BrendenWalker/kaleido_scope/releases/tag/v3.1.4</url>
       <description>
         <p>FIXES</p>
         <ul>
@@ -253,7 +250,7 @@
     </release>
 
     <release version="3.1.2" date="2025-04-30">
-      <url type="details">https://github.com/artisan-roaster-scope/artisan/releases/tag/v3.1.2</url>
+      <url type="details">https://github.com/BrendenWalker/kaleido_scope/releases/tag/v3.1.2</url>
       <description>
         <p>ADDITIONS</p>
         <ul>
@@ -348,7 +345,7 @@
     </release>
 
     <release version="3.1.1.1" date="2024-12-09">
-      <url type="details">https://github.com/artisan-roaster-scope/artisan/releases/tag/v3.1.1.1</url>
+      <url type="details">https://github.com/BrendenWalker/kaleido_scope/releases/tag/v3.1.1.1</url>
       <description>
         <p>ADDITIONS</p>
         <ul>
@@ -407,7 +404,7 @@
     </release>
 
     <release version="3.0.2" date="2024-08-20">
-      <url type="details">https://github.com/artisan-roaster-scope/artisan/releases/tag/v3.0.2</url>
+      <url type="details">https://github.com/BrendenWalker/kaleido_scope/releases/tag/v3.0.2</url>
       <description>
         <p>CHANGES</p>
         <ul>
@@ -427,7 +424,7 @@
     </release>
 
     <release version="3.0.0" date="2024-08-01">
-      <url type="details">https://github.com/artisan-roaster-scope/artisan/releases/tag/v3.0.0</url>
+      <url type="details">https://github.com/BrendenWalker/kaleido_scope/releases/tag/v3.0.0</url>
       <description>
         <p>ADDITIONS</p>
         <ul>
@@ -471,7 +468,7 @@
     </release>
 
     <release version="2.10.4" date="2024-03-22">
-      <url type="details">https://github.com/artisan-roaster-scope/artisan/releases/tag/v2.10.4</url>
+      <url type="details">https://github.com/BrendenWalker/kaleido_scope/releases/tag/v2.10.4</url>
       <description>
         <p>This version is a bug fix release.</p>
         <ul>

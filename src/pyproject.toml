@@ -32,11 +32,11 @@ classifiers = [
 ]
 
 [project.urls]
-'Homepage' = 'https://artisan-scope.org/'
-'Documentation' = 'https://artisan-scope.org/docs/quick-start-guide/'
-'Repository' = 'https://github.com/artisan-roaster-scope/artisan'
-'Issue Tracker' = 'https://github.com/artisan-roaster-scope/artisan/issues'
-'Changelog' = 'https://github.com/artisan-roaster-scope/artisan/blob/master/wiki/ReleaseHistory.md'
+'Homepage' = 'https://github.com/BrendenWalker/kaleido_scope'
+'Documentation' = 'https://github.com/BrendenWalker/kaleido_scope'
+'Repository' = 'https://github.com/BrendenWalker/kaleido_scope'
+'Issue Tracker' = 'https://github.com/BrendenWalker/kaleido_scope/issues'
+'Changelog' = 'https://github.com/BrendenWalker/kaleido_scope/blob/master/wiki/ReleaseHistory.md'
 
 
 ## black

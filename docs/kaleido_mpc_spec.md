@@ -18,7 +18,7 @@ Status:
   [`scripts/compare_hybrid_backends.py`](../scripts/compare_hybrid_backends.py)
 
 This is the **canonical** architecture and control-design document for Kaleido hybrid control in the
-`artisan_kaleido` fork. It consolidates the M6 RoR-shape Hybrid playbook, the two-level energy
+`kaleido_scope` fork. It consolidates the M6 RoR-shape Hybrid playbook, the two-level energy
 architecture, and the longer-term Model Predictive Control (MPC) backend.
 
 **Log refinement (2026-07):** schedule priors and plant-response notes were derived from **23**

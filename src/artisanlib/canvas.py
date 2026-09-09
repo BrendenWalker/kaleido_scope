@@ -19,9 +19,6 @@ from artisanlib import __version__
 from artisanlib import __revision__
 from artisanlib import __build__
 
-from artisanlib import __release_sponsor_domain__
-from artisanlib import __release_sponsor_url__
-
 #import gc
 import time as libtime
 import os
@@ -74,7 +71,7 @@ from PyQt6.QtWidgets import (QApplication, QWidget, QMessageBox,
                          QSizePolicy,
                          QMenu)
 from PyQt6.QtGui import (QAction, QImage,
-                            QColor, QDesktopServices,
+                            QColor,
                             QCursor)
 from PyQt6.QtCore import (QLocale, pyqtSignal, pyqtSlot,
                           QTimer, QSettings,
@@ -1349,10 +1346,6 @@ class tgraphcanvas(QObject):
         self.roastpropertiesflag:int = 1  #resets roast properties if not zero
         self.roastpropertiesAutoOpenFlag:int = 0  #open roast properties dialog on CHARGE if not zero
         self.roastpropertiesAutoOpenDropFlag:int = 0  #open roast properties dialog on DROP if not zero
-
-        # if True, reminds user to set beans and open Roast Properties once when beans are empty
-        # this flag is reset after the warning dialog popped up once and is set to True again on OFF and
-        self.plus_beans_reminder_on_start:bool = True
 
         self.title:str = QApplication.translate('Scope Title', 'Roaster Scope')
         self.title_show_always:bool = False
@@ -4120,9 +4113,6 @@ class tgraphcanvas(QObject):
                     if isinstance(fig, Figure):
                         s = fig.get_size_inches()*fig.dpi
                         if event.x > s[0]*2/3 and event.y > s[1]*2/3:
-                            if not self.flagstart and not self.flagon and self.backgroundprofile is None and __release_sponsor_domain__ and __release_sponsor_url__:
-                                QDesktopServices.openUrl(QUrl(__release_sponsor_url__, QUrl.ParsingMode.TolerantMode))
-                                return
                             if self.backgroundprofile is not None:
                                 # toggle background if right top corner above canvas where the subtitle is clicked
                                 self.background = not self.background
@@ -9556,9 +9546,6 @@ class tgraphcanvas(QObject):
                                 titleB = self.titleB
                             else:
                                 titleB = f'{self.roastbatchprefixB}{self.roastbatchnrB} {self.titleB}'
-                        elif __release_sponsor_domain__ != '':
-                            sponsor = QApplication.translate('About','sponsored by {}').format(__release_sponsor_domain__)
-                            titleB = f'\n{sponsor}'
 
                     # extra event names with substitution of event names applied
                     extraname1_subst = self.extraname1[:]
@@ -13786,7 +13773,6 @@ class tgraphcanvas(QObject):
         if self.flagon:
             try:
                 # reset
-                self.plus_beans_reminder_on_start = True
 
                 # activate "Stopping Mode" to ensure that sample() is not resetting the timer now (independent of the flagstart state)
 
@@ -14471,28 +14457,12 @@ class tgraphcanvas(QObject):
             if not self.checkSaved():
                 return
 
-            if (not self.roastpropertiesAutoOpenFlag and
-                    not self.roastpropertiesAutoOpenDropFlag and
-                    self.plus_beans_reminder_on_start and
-                    (self.plus_coffee is None and self.plus_blend_spec is None and self.beans == '')):
-                self.aw.open_roast_properties_dialog(start_recording_on_exit=True)
-                return
-
             self.aw.soundpopSignal.emit()
             if self.flagon and len(self.timex) == 1:
                 # we are already in monitoring mode, we just clear this first measurement and go
                 self.clearMeasurements(andLCDs=False)
             elif self.timex != []: # there is a profile loaded, we have to reset
                 self.reset(True,False,keepProperties=True)
-            try:
-                settings = QSettings()
-                starts = 0
-                if settings.contains('starts'):
-                    starts = toInt(settings.value('starts'))
-                settings.setValue('starts',starts+1)
-                settings.sync()
-            except Exception as e: # pylint: disable=broad-except
-                _log.exception(e)
             self.OnRecorder()
         #turn STOP
         else:
