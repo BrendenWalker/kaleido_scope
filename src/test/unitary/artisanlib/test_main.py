@@ -1029,27 +1029,6 @@ class TestImportJSON:
 # ===== STATIC METHOD TESTS =====
 
 
-# class TestResetDonateCounter:
-#    """Test resetDonateCounter static method."""
-#
-#    @patch("artisanlib.main.QSettings")
-#    @patch("artisanlib.main.libtime.time")
-#    def test_resetDonateCounter(self, mock_time: Mock, mock_qsettings: Mock) -> None:
-#        """Test resetDonateCounter sets correct values."""
-#        # Arrange
-#        mock_time.return_value = 1234567890
-#        mock_settings = Mock()
-#        mock_qsettings.return_value = mock_settings
-#
-#        # Act
-#        ApplicationWindow.resetDonateCounter()
-#
-#        # Assert
-#        mock_settings.setValue.assert_any_call("lastdonationpopup", 1234567890)
-#        mock_settings.setValue.assert_any_call("starts", 0)
-#        mock_settings.sync.assert_called_once()
-
-
 class TestTimeConversionMethods:
     """Test time2QTime and QTime2time static methods."""
 
@@ -3598,22 +3577,6 @@ class TestColorUtilitiesExtended:
         # Assert
         assert isinstance(result, str)
         assert result.startswith('#')
-
-
-class TestDonationUtilities:
-    """Test donation utility static methods."""
-
-    def test_resetDonateCounter_basic(self) -> None:
-        """Test resetDonateCounter resets donation settings."""
-        # Arrange & Act
-        ApplicationWindow.resetDonateCounter()
-
-        # Assert
-        settings = QSettings()
-        # Check that the settings were written (values should exist)
-        assert settings.contains('lastdonationpopup')
-        assert settings.contains('starts')
-        assert settings.value('starts') == 0
 
 
 class TestHelpDialogUtilities:

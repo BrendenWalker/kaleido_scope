@@ -43,11 +43,17 @@ from artisanlib.atypes import ProfileData
 
 _log: Final[logging.Logger] = logging.getLogger(__name__)
 
-application_name: Final[str] = 'Artisan'
+application_name: Final[str] = 'Artisan'  # QSettings / theme path; do not change
 application_viewer_name: Final[str] = 'ArtisanViewer'
-application_organization_name: Final[str] = 'artisan-kaleido'
-application_organization_domain: Final[str] = 'artisan-kaleido.org'
+application_display_name: Final[str] = 'Kaleido Scope'
+application_viewer_display_name: Final[str] = 'Kaleido Scope Viewer'
+application_organization_name: Final[str] = 'kaleido-scope'
+application_organization_domain: Final[str] = 'kaleido-scope.org'
 application_desktop_file_name: Final[str] = 'org.artisan_scope.artisan'
+
+# Previous fork identity (Artisan Kaleido); one-time QSettings migration source
+legacy_kaleido_application_organization_name: Final[str] = 'artisan-kaleido'
+legacy_kaleido_application_organization_domain: Final[str] = 'artisan-kaleido.org'
 
 # Official upstream Artisan QSettings location (one-time migration source only)
 official_application_organization_name: Final[str] = 'artisan-scope'
@@ -399,10 +405,10 @@ def replace_duplicates(data:list[float]) -> list[float]:
 # for the platform
 # note that the path is based on the ApplicationName and OrganizationName
 # setting of the app
-# eg. ~/Library/Application Support/artisan-kaleido/Artisan (macOS)
-#     C:\Users\<USER>\AppData\Local\artisan-kaleido\Artisan (Windows)
-#     ~/.local/share/artisan-kaleido/Artisan (Linux)
-#     ~/.var/app/org.artisan_scope.artisan/data/artisan-kaleido/Artisan/artisan.log (Linux if installed via Flatpack)
+# eg. ~/Library/Application Support/kaleido-scope/Artisan (macOS)
+#     C:\Users\<USER>\AppData\Local\kaleido-scope\Artisan (Windows)
+#     ~/.local/share/kaleido-scope/Artisan (Linux)
+#     ~/.var/app/org.artisan_scope.artisan/data/kaleido-scope/Artisan/artisan.log (Linux if installed via Flatpack)
 
 # getDataDirectory() returns the Artisan data directory
 # if app is not yet initialized None is returned

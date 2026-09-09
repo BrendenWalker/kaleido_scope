@@ -1,18 +1,14 @@
 #### Artisan helps coffee roasters record, analyze, and control roast profiles. With the help of a thermocouple data logger, or a proportional–integral–derivative controller (PID controller), this software offers roasting metrics to help make decisions that influence the final coffee flavor.
 
-Artisan is free for personal and commercial use, but asks for a [donation](https://www.paypal.me/MarkoLuther).
-
 ## HOME
 
-<https://artisan-scope.org>
+<https://github.com/BrendenWalker/kaleido_scope>
 
 The home of its development is on GitHub were all source and binary files are available as well as an issue tracker.
 
-<https://github.com/artisan-roaster-scope/artisan>
-
 ## DISCUSSION FORUM
 
-<https://github.com/artisan-roaster-scope/artisan/discussions>
+<https://github.com/BrendenWalker/kaleido_scope/discussions>
 
 ## ARTISAN BLOG
 
@@ -37,7 +33,7 @@ Runs on 64bit Windows 10, macOS (legacy builds support Windows 8 x64 and macOS 1
 
 ## INSTALLATION
 
-See <https://github.com/artisan-roaster-scope/artisan/blob/master/wiki/Installation.md>
+See <https://github.com/BrendenWalker/kaleido_scope/blob/master/wiki/Installation.md>
 
 ## LICENCE
 
@@ -81,4 +77,4 @@ Artisan uses the following libraries in unmodified forms:
 
 ## VERSION HISTORY
 
-See <https://github.com/artisan-roaster-scope/artisan>
+See <https://github.com/BrendenWalker/kaleido_scope>

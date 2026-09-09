@@ -1,12 +1,12 @@
 @echo off
 setlocal EnableExtensions
-REM Run Artisan Kaleido from source during local development (Windows).
+REM Run Kaleido Scope from source during local development (Windows).
 REM Requires Python 3.12+ on PATH.
 
 cd /d "%~dp0"
 
 echo.
-echo === Artisan Kaleido local development startup ===
+echo === Kaleido Scope local development startup ===
 echo.
 
 where python >nul 2>&1
