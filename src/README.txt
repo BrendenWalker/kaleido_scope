@@ -1,6 +1,6 @@
 # Kaleido Scope
 
-Artisan fork for Kaleido hybrid electric/convection roasters: coordinated heater + fan (Hybrid Controller), cooldown, and Kaleido-only config over time.
+Artisan fork for Kaleido hybrid electric/convection roasters: coordinated heater + fan (Hybrid Controller), cooldown, Kaleido Network/Serial machines, and extra loggers (Phidget / TC4 / Yocto / Virtual).
 
 Project home, what this adds versus Artisan, and how to roast:
 

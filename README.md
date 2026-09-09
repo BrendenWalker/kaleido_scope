@@ -17,7 +17,7 @@ If you only log, drive sliders by hand, or roast a machine that is not a Kaleido
 | Coordinated **HP + FC** | No (one actuator) | **Hybrid Controller** |
 | Built-in declining **RoR shape** by phase | No | Yes (planner drives both actuators) |
 | After-roast **cooldown** | Manual sliders | **COOLDOWN** (air 100% / drum 10% until BT &lt; 50°C, then all off) |
-| Config | Every Artisan machine and logger | Same maze **for now**; other **machines** will be stripped. Kaleido channels + generic extra loggers stay |
+| Config | Every Artisan machine and logger | **Kaleido Network / Serial** only. Extra loggers (Phidget / TC4 / Yocto / Virtual) stay |
 
 Hybrid does **not** follow a background profile. Background is for eyes only.
 
@@ -55,9 +55,9 @@ Manual fallback: PID off, sliders (FC = 1, HP = 4 in the Kaleido preset).
 
 Full sequence and exit criteria: [docs/ROADMAP.md](docs/ROADMAP.md).
 
-**Now:** Hybrid Energy, optional Lite MPC, COOLDOWN, Artisan logging.
+**Now:** Hybrid Energy, optional Lite MPC, COOLDOWN, Artisan logging. Roast → Machine is Kaleido Network / Serial only; extra loggers (Phidget / TC4 / Yocto / Virtual) can plot beside Kaleido.
 
-**Next:** M0 Config strip (in flight — other machines out; Kaleido channels + generic extra loggers stay) → M1 presets/schedule editor → M2 diagnostics + quiet MPC, then gated MPC default.
+**Next:** M1 presets/schedule editor → M2 diagnostics + quiet MPC, then gated MPC default.
 
 **Later:** drum RC, `.alog` calibration, learned plant.
 
@@ -71,7 +71,7 @@ pip install -r requirements.txt
 python artisan.py
 ```
 
-Python 3.10+, Kaleido on WebSocket (`host` / port `80` / `/ws`) or serial. Until Config is stripped, pick Kaleido as the meter and ignore other machines; extra loggers are still valid.
+Python 3.10+, Kaleido on WebSocket (`host` / port `80` / `/ws`) or serial. Load **Kaleido Network** or **Kaleido Serial**. Extra Devices can add Kaleido channels 139–141 and a generic logger (Phidget / Arduino TC4 / Yocto / Virtual).
 
 ## Help Fund Artisan Scope
 

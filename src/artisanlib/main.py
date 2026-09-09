@@ -17805,8 +17805,103 @@ class ApplicationWindow(QMainWindow):
             settings.endGroup()
 #--- END GROUP Alarms
 
-
-
+#--- BEGIN GROUP ArduinoPID
+            #restore TC4/Arduino PID settings (SV slider, software PID, Kaleido warmup SV)
+            settings.beginGroup('ArduinoPID')
+            self.pidcontrol.pidOnCHARGE = toBool(settings.value('pidOnCHARGE',self.pidcontrol.pidOnCHARGE))
+            self.pidcontrol.pidOffDROP = toBool(settings.value('pidOffDROP',self.pidcontrol.pidOffDROP))
+#            self.pidcontrol.RStimeAfterCHARGE = toBool(settings.value('RStimeAfterCHARGE',self.pidcontrol.RStimeAfterCHARGE))
+            self.pidcontrol.loadpidfrombackground = toBool(settings.value('loadpidfrombackground',self.pidcontrol.loadpidfrombackground))
+            self.pidcontrol.createEvents = toBool(settings.value('createEvents',self.pidcontrol.createEvents))
+            self.pidcontrol.loadRampSoakFromProfile = toBool(settings.value('loadRampSoakFromProfile',self.pidcontrol.loadRampSoakFromProfile))
+            self.pidcontrol.svValues = [toInt(x) for x in toList(settings.value('svValues',self.pidcontrol.svValues))]
+            self.pidcontrol.svRamps = [toInt(x) for x in toList(settings.value('svRamps',self.pidcontrol.svRamps))]
+            self.pidcontrol.svSoaks = [toInt(x) for x in toList(settings.value('svSoaks',self.pidcontrol.svSoaks))]
+            self.pidcontrol.svActions = [toInt(x) for x in toList(settings.value('svActions',self.pidcontrol.svActions))]
+            self.pidcontrol.svBeeps = [toBool(x) for x in toList(settings.value('svBeeps',self.pidcontrol.svBeeps))]
+            self.pidcontrol.svDescriptions = list(toStringList(settings.value('svDescriptions',self.pidcontrol.svDescriptions)))
+            self.pidcontrol.svSlider = toBool(settings.value('svSlider',self.pidcontrol.svSlider))
+            self.pidcontrol.svButtons = toBool(settings.value('svButtons',self.pidcontrol.svButtons))
+            self.pidcontrol.svMode = toInt(settings.value('svMode',self.pidcontrol.svMode))
+            self.pidcontrol.svLookahead = toInt(settings.value('svLookahead',self.pidcontrol.svLookahead))
+            self.pidcontrol.dutySteps = toInt(settings.value('dutySteps',self.pidcontrol.dutySteps))
+            self.pidcontrol.svSliderMin = max(0, min(999, toInt(settings.value('svSliderMin',self.pidcontrol.svSliderMin))))
+            self.pidcontrol.svSliderMax = max(0, min(999, toInt(settings.value('svSliderMax',self.pidcontrol.svSliderMax))))
+            self.pidcontrol.svValue = toInt(settings.value('svValue',self.pidcontrol.svValue))
+            self.pidcontrol.svSync = toInt(settings.value('svSync',self.pidcontrol.svSync))
+            self.pidcontrol.loadRampSoakFromBackground = toBool(settings.value('loadRampSoakFromBackground',self.pidcontrol.loadRampSoakFromBackground))
+            self.pidcontrol.svLabel = toString(settings.value('svLabel',self.pidcontrol.svLabel))
+            self.pidcontrol.dutyMin = toInt(settings.value('dutyMin',self.pidcontrol.dutyMin))
+            self.pidcontrol.dutyMax = toInt(settings.value('dutyMax',self.pidcontrol.dutyMax))
+            self.pidcontrol.positiveTargetRangeLimit = toBool(settings.value('positiveTargetRangeLimit',self.pidcontrol.positiveTargetRangeLimit))
+            self.pidcontrol.positiveTargetMin = toInt(settings.value('positiveTargetMin',self.pidcontrol.positiveTargetMin))
+            self.pidcontrol.positiveTargetMax = toInt(settings.value('positiveTargetMax',self.pidcontrol.positiveTargetMax))
+            self.pidcontrol.negativeTargetRangeLimit = toBool(settings.value('negativeTargetRangeLimit',self.pidcontrol.negativeTargetRangeLimit))
+            self.pidcontrol.negativeTargetMin = toInt(settings.value('negativeTargetMin',self.pidcontrol.negativeTargetMin))
+            self.pidcontrol.negativeTargetMax = toInt(settings.value('negativeTargetMax',self.pidcontrol.negativeTargetMax))
+            self.pidcontrol.derivative_filter = toInt(settings.value('derivative_filter',self.pidcontrol.derivative_filter))
+            self.pidcontrol.duty_filter = toInt(settings.value('duty_filter',self.pidcontrol.duty_filter))
+            self.pidcontrol.sv_filter = toInt(settings.value('sv_filter',self.pidcontrol.sv_filter))
+            self.pidcontrol.activateSVSlider(self.pidcontrol.svSlider)
+            #-
+            self.pidcontrol.pidKp = toFloat(settings.value('pidKp',self.pidcontrol.pidKp))
+            self.pidcontrol.pidKi = toFloat(settings.value('pidKi',self.pidcontrol.pidKi))
+            self.pidcontrol.pidKd = toFloat(settings.value('pidKd',self.pidcontrol.pidKd))
+            # for compatibility with older settings initialize the Gain Scheduler parameters with the original set of p-i-d parameters
+            self.pidcontrol.pidKp1 = self.pidcontrol.pidKp
+            self.pidcontrol.pidKi1 = self.pidcontrol.pidKi
+            self.pidcontrol.pidKd1 = self.pidcontrol.pidKd
+            self.pidcontrol.pidKp2 = self.pidcontrol.pidKp
+            self.pidcontrol.pidKi2 = self.pidcontrol.pidKi
+            self.pidcontrol.pidKd2 = self.pidcontrol.pidKd
+            #-
+            self.pidcontrol.pidKp1 = toFloat(settings.value('pidKp1',self.pidcontrol.pidKp1))
+            self.pidcontrol.pidKi1 = toFloat(settings.value('pidKi1',self.pidcontrol.pidKi1))
+            self.pidcontrol.pidKd1 = toFloat(settings.value('pidKd1',self.pidcontrol.pidKd1))
+            #-
+            self.pidcontrol.pidKp2 = toFloat(settings.value('pidKp2',self.pidcontrol.pidKp2))
+            self.pidcontrol.pidKi2 = toFloat(settings.value('pidKi2',self.pidcontrol.pidKi2))
+            self.pidcontrol.pidKd2 = toFloat(settings.value('pidKd2',self.pidcontrol.pidKd2))
+            #-
+            self.pidcontrol.pidSchedule0 = toFloat(settings.value('pidSchedule0',self.pidcontrol.pidSchedule0))
+            self.pidcontrol.pidSchedule1 = toFloat(settings.value('pidSchedule1',self.pidcontrol.pidSchedule1))
+            self.pidcontrol.pidSchedule2 = toFloat(settings.value('pidSchedule2',self.pidcontrol.pidSchedule2))
+            #-
+            self.pidcontrol.pidGainScheduling = toBool(settings.value('pidGainScheduling',self.pidcontrol.pidGainScheduling))
+            self.pidcontrol.pidGainSchedulingSV = toBool(settings.value('pidGainSchedulingSV',self.pidcontrol.pidGainSchedulingSV))
+            self.pidcontrol.pidGainSchedulingQuadratic = toBool(settings.value('pidGainSchedulingQuadratic',self.pidcontrol.pidGainSchedulingQuadratic))
+            #-
+            self.pidcontrol.pidPsetpointWeight = toFloat(settings.value('pidPsetpointWeight',self.pidcontrol.pidPsetpointWeight))
+            if settings.contains('pidDoE'):
+                self.pidcontrol.pidDsetpointWeight = (1 if toBool(settings.value('pidDoE', True)) else 0)
+            self.pidcontrol.pidDsetpointWeight = toFloat(settings.value('pidDsetpointWeight',self.pidcontrol.pidDsetpointWeight))
+            self.pidcontrol.pidDlimit = toFloat(settings.value('pidDlimit',self.pidcontrol.pidDlimit))
+            self.pidcontrol.pidIlimitFactor = toFloat(settings.value('pidIlimitFactor',self.pidcontrol.pidIlimitFactor))
+            self.pidcontrol.pidIWP = toBool(settings.value('pidIWP',self.pidcontrol.pidIWP))
+            self.pidcontrol.pidIRoC = toBool(settings.value('pidIRoC',self.pidcontrol.pidIRoC))
+            self.pidcontrol.pidIRoCthreshold = toFloat(settings.value('pidIRoCthreshold',self.pidcontrol.pidIRoCthreshold))
+            self.pidcontrol.pidSource = toInt(settings.value('pidSource',self.pidcontrol.pidSource))
+            self.pidcontrol.pidCycle = toInt(settings.value('pidCycle',self.pidcontrol.pidCycle))
+            self.pidcontrol.pidPositiveTarget = toInt(settings.value('pidPositiveTarget',self.pidcontrol.pidPositiveTarget))
+            self.pidcontrol.pidNegativeTarget = toInt(settings.value('pidNegativeTarget',self.pidcontrol.pidNegativeTarget))
+            self.pidcontrol.invertControl = toBool(settings.value('invertControl',self.pidcontrol.invertControl))
+            for n in range(self.pidcontrol.RSLen):
+                svLabelLabel = 'RS_svLabel'+str(n)
+                self.pidcontrol.RS_svLabels[n] = toString(settings.value(svLabelLabel,self.pidcontrol.RS_svLabels[n]))
+                svValuesLabel = 'RS_svValues'+str(n)
+                self.pidcontrol.RS_svValues[n] = [toFloat(x) for x in toList(settings.value(svValuesLabel,self.pidcontrol.RS_svValues[n]))]
+                svRampsLabel = 'RS_svRamps'+str(n)
+                self.pidcontrol.RS_svRamps[n] = [toInt(x) for x in toList(settings.value(svRampsLabel,self.pidcontrol.RS_svRamps[n]))]
+                svSoaksLabel = 'RS_svSoaks'+str(n)
+                self.pidcontrol.RS_svSoaks[n] = [toInt(x) for x in toList(settings.value(svSoaksLabel,self.pidcontrol.RS_svSoaks[n]))]
+                svActionsLabel = 'RS_svActions'+str(n)
+                self.pidcontrol.RS_svActions[n] = [toInt(x) for x in toList(settings.value(svActionsLabel,self.pidcontrol.RS_svActions[n]))]
+                svBeepsLabel = 'RS_svBeeps'+str(n)
+                self.pidcontrol.RS_svBeeps[n] = [toBool(x) for x in toList(settings.value(svBeepsLabel,self.pidcontrol.RS_svBeeps[n]))]
+                svDescriptionsLabel = 'RS_svDescriptions'+str(n)
+                self.pidcontrol.RS_svDescriptions[n] = list(toStringList(settings.value(svDescriptionsLabel,self.pidcontrol.RS_svDescriptions[n])))
+            settings.endGroup()
+#--- END GROUP ArduinoPID
 
 
             self.qmc.filterDropOuts = toBool(settings.value('filterDropOuts',self.qmc.filterDropOuts))
@@ -19558,6 +19653,88 @@ class ApplicationWindow(QMainWindow):
             self.settingsSetValue(settings, default_settings, 'alarmsets',[self.qmc.alarmSet2Lists(aset) for aset in self.qmc.alarmsets], read_defaults)
             settings.endGroup()
 #--- END GROUP Alarms
+
+#--- BEGIN GROUP ArduinoPID
+            #save pid settings (only key and value[0])
+            settings.beginGroup('ArduinoPID')
+            self.settingsSetValue(settings, default_settings, 'pidOnCHARGE',self.pidcontrol.pidOnCHARGE, read_defaults)
+            self.settingsSetValue(settings, default_settings, 'pidOffDROP',self.pidcontrol.pidOffDROP, read_defaults)
+#            self.settingsSetValue(settings, default_settings, 'RStimeAfterCHARGE',self.pidcontrol.RStimeAfterCHARGE, read_defaults)
+            self.settingsSetValue(settings, default_settings, 'loadpidfrombackground',self.pidcontrol.loadpidfrombackground, read_defaults)
+            self.settingsSetValue(settings, default_settings, 'createEvents',self.pidcontrol.createEvents, read_defaults)
+            self.settingsSetValue(settings, default_settings, 'loadRampSoakFromProfile',self.pidcontrol.loadRampSoakFromProfile, read_defaults)
+            self.settingsSetValue(settings, default_settings, 'loadRampSoakFromBackground',self.pidcontrol.loadRampSoakFromBackground, read_defaults)
+            self.settingsSetValue(settings, default_settings, 'svLabel',self.pidcontrol.svLabel, read_defaults)
+            self.settingsSetValue(settings, default_settings, 'svValues',self.pidcontrol.svValues, read_defaults)
+            self.settingsSetValue(settings, default_settings, 'svRamps',self.pidcontrol.svRamps, read_defaults)
+            self.settingsSetValue(settings, default_settings, 'svSoaks',self.pidcontrol.svSoaks, read_defaults)
+            self.settingsSetValue(settings, default_settings, 'svActions',self.pidcontrol.svActions, read_defaults)
+            self.settingsSetValue(settings, default_settings, 'svBeeps',self.pidcontrol.svBeeps, read_defaults)
+            self.settingsSetValue(settings, default_settings, 'svDescriptions',self.pidcontrol.svDescriptions, read_defaults)
+            self.settingsSetValue(settings, default_settings, 'svSlider',self.pidcontrol.svSlider, read_defaults)
+            self.settingsSetValue(settings, default_settings, 'svButtons',self.pidcontrol.svButtons, read_defaults)
+            self.settingsSetValue(settings, default_settings, 'svMode',self.pidcontrol.svMode, read_defaults)
+            self.settingsSetValue(settings, default_settings, 'svLookahead',self.pidcontrol.svLookahead, read_defaults)
+            self.settingsSetValue(settings, default_settings, 'dutySteps',self.pidcontrol.dutySteps, read_defaults)
+            self.settingsSetValue(settings, default_settings, 'svSliderMin',self.pidcontrol.svSliderMin, read_defaults)
+            self.settingsSetValue(settings, default_settings, 'svSliderMax',self.pidcontrol.svSliderMax, read_defaults)
+            sv = max(min(self.pidcontrol.svValue, self.pidcontrol.svSliderMax), self.pidcontrol.svSliderMin)
+            self.settingsSetValue(settings, default_settings, 'svValue',sv, read_defaults)
+            self.settingsSetValue(settings, default_settings, 'svSync',self.pidcontrol.svSync, read_defaults)
+            self.settingsSetValue(settings, default_settings, 'dutyMin',self.pidcontrol.dutyMin, read_defaults)
+            self.settingsSetValue(settings, default_settings, 'dutyMax',self.pidcontrol.dutyMax, read_defaults)
+            self.settingsSetValue(settings, default_settings, 'positiveTargetRangeLimit',self.pidcontrol.positiveTargetRangeLimit, read_defaults)
+            self.settingsSetValue(settings, default_settings, 'positiveTargetMin',self.pidcontrol.positiveTargetMin, read_defaults)
+            self.settingsSetValue(settings, default_settings, 'positiveTargetMax',self.pidcontrol.positiveTargetMax, read_defaults)
+            self.settingsSetValue(settings, default_settings, 'negativeTargetRangeLimit',self.pidcontrol.negativeTargetRangeLimit, read_defaults)
+            self.settingsSetValue(settings, default_settings, 'negativeTargetMin',self.pidcontrol.negativeTargetMin, read_defaults)
+            self.settingsSetValue(settings, default_settings, 'negativeTargetMax',self.pidcontrol.negativeTargetMax, read_defaults)
+            self.settingsSetValue(settings, default_settings, 'derivative_filter',self.pidcontrol.derivative_filter, read_defaults)
+            self.settingsSetValue(settings, default_settings, 'duty_filter',self.pidcontrol.duty_filter, read_defaults)
+            self.settingsSetValue(settings, default_settings, 'sv_filter',self.pidcontrol.sv_filter, read_defaults)
+            #-
+            self.settingsSetValue(settings, default_settings, 'pidKp',self.pidcontrol.pidKp, read_defaults)
+            self.settingsSetValue(settings, default_settings, 'pidKi',self.pidcontrol.pidKi, read_defaults)
+            self.settingsSetValue(settings, default_settings, 'pidKd',self.pidcontrol.pidKd, read_defaults)
+            #-
+            self.settingsSetValue(settings, default_settings, 'pidKp1',self.pidcontrol.pidKp1, read_defaults)
+            self.settingsSetValue(settings, default_settings, 'pidKi1',self.pidcontrol.pidKi1, read_defaults)
+            self.settingsSetValue(settings, default_settings, 'pidKd1',self.pidcontrol.pidKd1, read_defaults)
+            #-
+            self.settingsSetValue(settings, default_settings, 'pidKp2',self.pidcontrol.pidKp2, read_defaults)
+            self.settingsSetValue(settings, default_settings, 'pidKi2',self.pidcontrol.pidKi2, read_defaults)
+            self.settingsSetValue(settings, default_settings, 'pidKd2',self.pidcontrol.pidKd2, read_defaults)
+            #-
+            self.settingsSetValue(settings, default_settings, 'pidSchedule0',self.pidcontrol.pidSchedule0, read_defaults)
+            self.settingsSetValue(settings, default_settings, 'pidSchedule1',self.pidcontrol.pidSchedule1, read_defaults)
+            self.settingsSetValue(settings, default_settings, 'pidSchedule2',self.pidcontrol.pidSchedule2, read_defaults)
+            #-
+            self.settingsSetValue(settings, default_settings, 'pidGainScheduling',self.pidcontrol.pidGainScheduling, read_defaults)
+            self.settingsSetValue(settings, default_settings, 'pidGainSchedulingSV',self.pidcontrol.pidGainSchedulingSV, read_defaults)
+            self.settingsSetValue(settings, default_settings, 'pidGainSchedulingQuadratic',self.pidcontrol.pidGainSchedulingQuadratic, read_defaults)
+            #-
+            self.settingsSetValue(settings, default_settings, 'pidPsetpointWeight',self.pidcontrol.pidPsetpointWeight, read_defaults)
+            self.settingsSetValue(settings, default_settings, 'pidDsetpointWeight',self.pidcontrol.pidDsetpointWeight, read_defaults)
+            self.settingsSetValue(settings, default_settings, 'pidDlimit',self.pidcontrol.pidDlimit, read_defaults)
+            self.settingsSetValue(settings, default_settings, 'pidIlimitFactor',self.pidcontrol.pidIlimitFactor, read_defaults)
+            self.settingsSetValue(settings, default_settings, 'pidIWP',self.pidcontrol.pidIWP, read_defaults)
+            self.settingsSetValue(settings, default_settings, 'pidIRoC',self.pidcontrol.pidIRoC, read_defaults)
+            self.settingsSetValue(settings, default_settings, 'pidIRoCthreshold',self.pidcontrol.pidIRoCthreshold, read_defaults)
+            self.settingsSetValue(settings, default_settings, 'pidSource',self.pidcontrol.pidSource, read_defaults)
+            self.settingsSetValue(settings, default_settings, 'pidCycle',self.pidcontrol.pidCycle, read_defaults)
+            self.settingsSetValue(settings, default_settings, 'pidPositiveTarget',self.pidcontrol.pidPositiveTarget, read_defaults)
+            self.settingsSetValue(settings, default_settings, 'pidNegativeTarget',self.pidcontrol.pidNegativeTarget, read_defaults)
+            self.settingsSetValue(settings, default_settings, 'invertControl',self.pidcontrol.invertControl, read_defaults)
+            for n in range(self.pidcontrol.RSLen):
+                self.settingsSetValue(settings, default_settings, 'RS_svLabel'+str(n),self.pidcontrol.RS_svLabels[n], read_defaults)
+                self.settingsSetValue(settings, default_settings, 'RS_svValues'+str(n),self.pidcontrol.RS_svValues[n], read_defaults)
+                self.settingsSetValue(settings, default_settings, 'RS_svRamps'+str(n),self.pidcontrol.RS_svRamps[n], read_defaults)
+                self.settingsSetValue(settings, default_settings, 'RS_svSoaks'+str(n),self.pidcontrol.RS_svSoaks[n], read_defaults)
+                self.settingsSetValue(settings, default_settings, 'RS_svActions'+str(n),self.pidcontrol.RS_svActions[n], read_defaults)
+                self.settingsSetValue(settings, default_settings, 'RS_svBeeps'+str(n),self.pidcontrol.RS_svBeeps[n], read_defaults)
+                self.settingsSetValue(settings, default_settings, 'RS_svDescriptions'+str(n),self.pidcontrol.RS_svDescriptions[n], read_defaults)
+            settings.endGroup()
+#--- END GROUP ArduinoPID
 
             self.settingsSetValue(settings, default_settings, 'profilepath',self.userprofilepath, read_defaults)
             self.settingsSetValue(settings, default_settings, 'settingspath',self.settingspath, read_defaults)

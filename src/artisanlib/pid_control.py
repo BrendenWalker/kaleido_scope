@@ -78,7 +78,7 @@ class PIDcontrol:
         self.RS_svBeeps: list[list[bool]] = [[False]*self.svLen]*self.RSLen  # alarm beep as bool per 8 channels
         self.RS_svDescriptions: list[list[str]] = [['']*self.svLen]*self.RSLen     # alarm descriptions as string per 8 channels
         #
-        self.svSlider:bool = False
+        self.svSlider:bool = True # Kaleido preheat SV (Machine PID TS); PID dialog can still hide it
         self.svButtons:bool = False
         self.svMode:int = 0 # 0: manual, 1: Ramp/Soak, 2: Follow (background profile)
         self.svLookahead:int = 0

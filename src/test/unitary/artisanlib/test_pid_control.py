@@ -228,6 +228,21 @@ class TestKaleidoHybridPhaseControl:
             aw.hybrid_controller.activate.assert_called_once()
             assert pc.pidActive is True
 
+    def test_sv_slider_defaults_on_for_kaleido_preheat(self) -> None:
+        aw = _make_hybrid_aw()
+        with patch('artisanlib.util.fromCtoFstrict'), \
+             patch('artisanlib.util.fromFtoCstrict'), \
+             patch('artisanlib.util.hex2int'), \
+             patch('artisanlib.util.str2cmd'), \
+             patch('artisanlib.util.stringfromseconds'), \
+             patch('artisanlib.util.cmd2str'), \
+             patch('artisanlib.util.float2float'), \
+             patch('PyQt6.QtWidgets.QApplication'), \
+             patch('PyQt6.QtCore.pyqtSlot'):
+            from artisanlib.pid_control import PIDcontrol
+            pc = PIDcontrol(aw)
+            assert pc.svSlider is True
+
     def test_set_sv_warmup_writes_kaleido_ts(self) -> None:
         aw = _make_hybrid_aw()
         with patch('artisanlib.util.fromCtoFstrict'), \
