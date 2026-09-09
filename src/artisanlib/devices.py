@@ -29,7 +29,7 @@ if TYPE_CHECKING:
 
 from artisanlib.util import (deltaLabelUTF8, setDeviceDebugLogLevel, argb_colorname2rgba_colorname, rgba_colorname2argb_colorname)
 from artisanlib.dialogs import ArtisanResizeablDialog
-from artisanlib.widgets import MyContentLimitedQComboBox, MyQComboBox
+from artisanlib.widgets import MyContentLimitedQComboBox, MyQComboBox, MyQDoubleSpinBox
 
 
 _log: Final[logging.Logger] = logging.getLogger(__name__)
@@ -39,7 +39,7 @@ from PyQt6.QtGui import (QColor, QIntValidator, QRegularExpressionValidator, QSt
 from PyQt6.QtWidgets import (QApplication, QWidget, QCheckBox, QVBoxLayout, QHBoxLayout, QLabel, QLineEdit,
                              QPushButton, QSpinBox, QTabWidget, QComboBox, QDialogButtonBox, QGridLayout,
                              QGroupBox, QRadioButton, QButtonGroup,
-                             QTableWidget, QMessageBox, QHeaderView, QTableWidgetItem)
+                             QTableWidget, QMessageBox, QHeaderView, QTableWidgetItem, QSizePolicy)
 
 
 class DeviceAssignmentDlg(ArtisanResizeablDialog):

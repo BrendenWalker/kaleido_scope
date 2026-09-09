@@ -110,7 +110,7 @@ from PyQt6.QtWidgets import (QApplication, QWidget, QMessageBox, QLabel, QMainWi
                          QSlider,
                          QColorDialog, QFrame, QScrollArea, QProgressDialog,
                          QStyleFactory, QMenuBar, QMenu, QLayout, QDockWidget)
-from PyQt6.QtGui import (QScreen, QPageLayout, QAction, QImageReader, QWindow,
+from PyQt6.QtGui import (QScreen, QPageLayout, QAction, QActionGroup, QImageReader, QWindow,
                             QKeySequence, QShortcut,
                             QPixmap,QColor,QDesktopServices,QIcon,
                             QRegularExpressionValidator, QDoubleValidator, QPainter, QCursor)
@@ -5285,6 +5285,47 @@ class ApplicationWindow(QMainWindow):
 
     def populateMachineMenu(self) -> None:
         self.populateListMenu('Machines','.aset',self.openMachineSettings,self.machineMenu, addMenu=False)
+        group = QActionGroup(self.machineMenu)
+        group.setExclusive(True)
+        group.setExclusionPolicy(QActionGroup.ExclusionPolicy.ExclusiveOptional)
+        for action in self._machineMenuActions():
+            action.setCheckable(True)
+            group.addAction(action)
+        try:
+            self.machineMenu.aboutToShow.disconnect(self.updateMachineMenuSelection)
+        except TypeError:
+            pass
+        self.machineMenu.aboutToShow.connect(self.updateMachineMenuSelection)
+        self.updateMachineMenuSelection()
+
+    def _machineMenuActions(self) -> list[QAction]:
+        actions:list[QAction] = []
+        menus:list[QMenu] = [self.machineMenu]
+        while menus:
+            menu = menus.pop()
+            for action in menu.actions():
+                submenu = action.menu()
+                if submenu is not None:
+                    menus.append(submenu)
+                elif not action.isSeparator():
+                    actions.append(action)
+        return actions
+
+    def currentKaleidoMachineAsetBasename(self) -> str|None:
+        # Live connection mode, not the last menu click: Device WiFi/Serial can change without reloading a preset.
+        if self.qmc.device != 138:
+            return None
+        return 'Serial.aset' if self.kaleidoSerial else 'Network.aset'
+
+    @pyqtSlot()
+    def updateMachineMenuSelection(self) -> None:
+        wanted = self.currentKaleidoMachineAsetBasename()
+        for action in self._machineMenuActions():
+            data = action.data()
+            path = ''
+            if isinstance(data, (tuple, list)) and data:
+                path = str(data[0])
+            action.setChecked(wanted is not None and os.path.basename(path) == wanted)
 
     @pyqtSlot(bool)
     def openMachineSettings(self, _checked:bool = False) -> None:
