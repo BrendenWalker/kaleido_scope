@@ -533,12 +533,8 @@ class editGraphDlg(ArtisanResizeablDialog):
     connectScaleSignal = pyqtSignal()
     readScaleSignal = pyqtSignal()
 
-    # if start_recording_on_exit is set, on leaving the dialog with OK, the recording is started in case plus is connected and beans have been set
-    # and the flags "Open on CHARGE" and "Open on DROP" are not set
-    def __init__(self, parent:QWidget, aw:'ApplicationWindow', activeTab:int = 0, start_recording_on_exit:bool = False) -> None:
+    def __init__(self, parent:QWidget, aw:'ApplicationWindow', activeTab:int = 0) -> None:
         super().__init__(parent, aw)
-
-        self.start_recording_on_exit = start_recording_on_exit
 
         self.ETname = self.aw.qmc.device_name_subst(self.aw.ETname)
         self.BTname = self.aw.qmc.device_name_subst(self.aw.BTname)
@@ -1320,17 +1316,7 @@ class editGraphDlg(ArtisanResizeablDialog):
         self.plus_blends:list[Any]|None = None
         self.plus_amount_selected:float|None = None
         self.plus_amount_replace_selected:float|None = None
-        self.plus_default_store:str|None = self.aw.qmc.plus_default_store
-        if self.aw.qmc.plus_store is not None:
-            self.plus_store_selected = self.aw.qmc.plus_store
-            self.plus_store_selected_label = self.aw.qmc.plus_store_label
-        if self.aw.qmc.plus_coffee is not None:
-            self.plus_coffee_selected = self.aw.qmc.plus_coffee
-            self.plus_coffee_selected_label = self.aw.qmc.plus_coffee_label
-        elif self.aw.qmc.plus_blend_spec is not None:
-            self.plus_blend_selected_label = self.aw.qmc.plus_blend_label
-            self.plus_blend_selected_spec = self.aw.qmc.plus_blend_spec
-            self.plus_blend_selected_spec_labels = self.aw.qmc.plus_blend_spec_labels
+        self.plus_default_store:str|None = None
         textLayoutPlusOffset = 0
         if self.aw.ui_mode is UI_MODE.EXPERT:
             self.label_origin_flag = QCheckBox(QApplication.translate('CheckBox','Standard bean labels'))
@@ -1590,15 +1576,6 @@ class editGraphDlg(ArtisanResizeablDialog):
         totallayout.setSpacing(0)
         self.volume_percent()
 
-        if start_recording_on_exit:
-            from PyQt6.QtWidgets import QMessageBox
-            string = QApplication.translate('Message', 'Please enter the beans you are roasting in Roast Properties.')
-            mbox = QMessageBox(self.aw)
-            mbox.setText(string)
-            mbox.setStandardButtons(QMessageBox.StandardButton.Ok)
-            mbox.exec()
-            self.aw.qmc.plus_beans_reminder_on_start = False # prevent this warning to be shown again for this recording
-
         self.setLayout(totallayout)
 
         self.populatePlusCoffeeBlendCombos()
@@ -1808,13 +1785,7 @@ class editGraphDlg(ArtisanResizeablDialog):
         self.template_line.setText(line)
 
     def updatePlusSelectedLine(self) -> None:
-        try:
-            if self.start_recording_on_exit:
-                ok_button = self.dialogbuttons.button(QDialogButtonBox.StandardButton.Ok)
-                if ok_button is not None:
-                    ok_button.setEnabled(bool(self.beansedit.toPlainText().strip()))
-        except Exception as e: # pylint: disable=broad-except
-            _log.exception(e)
+        pass
 
     @pyqtSlot()
     def beansEdited(self) -> None:
@@ -1846,48 +1817,10 @@ class editGraphDlg(ArtisanResizeablDialog):
         del storeIndex
 
     def markPlusCoffeeFields(self, b:bool) -> None:
-        # for QTextEdit
-        if b:
-            if self.aw.app.darkmode:
-                self.beansedit.setStyleSheet('QTextEdit { background-color: #0D658F; selection-background-color: darkgray; }')
-            else:
-                self.beansedit.setStyleSheet('QTextEdit { background-color: #e4f3f8; selection-background-color: darkgray;  }')
-        else:
-            self.beansedit.setStyleSheet('QTextEdit { }')
-        # for QLineEdit
-        if b:
-            if self.aw.app.darkmode:
-                qlineedit_marked_style = 'QLineEdit { background-color: #0D658F; selection-background-color: darkgray; }'
-            else:
-                qlineedit_marked_style = 'QLineEdit { background-color: #e4f3f8; selection-background-color: #424242; }'
-            self.bean_density_in_edit.setStyleSheet(qlineedit_marked_style)
-            self.bean_size_min_edit.setStyleSheet(qlineedit_marked_style)
-            self.bean_size_max_edit.setStyleSheet(qlineedit_marked_style)
-            self.moisture_greens_edit.setStyleSheet(qlineedit_marked_style)
-        else:
-            background_white_style = ''
-            self.bean_density_in_edit.setStyleSheet(background_white_style)
-            self.bean_size_min_edit.setStyleSheet(background_white_style)
-            self.bean_size_max_edit.setStyleSheet(background_white_style)
-            self.moisture_greens_edit.setStyleSheet(background_white_style)
+        del b
 
     def updateTitle(self, prev_coffee_label:str|None, prev_blend_label:str|None) -> None:
-        titles_to_be_overwritten = [ '', QApplication.translate('Scope Title', 'Roaster Scope') ]
-        if prev_coffee_label is not None:
-            titles_to_be_overwritten.append(prev_coffee_label)
-        if prev_blend_label is not None:
-            titles_to_be_overwritten.append(prev_blend_label)
-        if self.titleedit.currentText() in titles_to_be_overwritten:
-            if self.plus_blend_selected_label is not None:
-                self.titleedit.textEdited(self.plus_blend_selected_label)
-                self.titleedit.setEditText(self.plus_blend_selected_label)
-            elif self.plus_coffee_selected_label is not None:
-                self.titleedit.textEdited(self.plus_coffee_selected_label)
-                self.titleedit.setEditText(self.plus_coffee_selected_label)
-            else:
-                default_title = QApplication.translate('Scope Title', 'Roaster Scope')
-                self.titleedit.textEdited(default_title)
-                self.titleedit.setEditText(default_title)
+        del prev_coffee_label, prev_blend_label
 
     def updateBlendLines(self, blend:Any) -> None:
         del blend
@@ -2102,13 +2035,13 @@ class editGraphDlg(ArtisanResizeablDialog):
                     self.aw.qmc.roastbatchnr, #self.batchcounterSpinBox # self.aw.superusermode and self.aw.qmc.batchcounter > -1
                     self.aw.qmc.roastbatchprefix,  #self.batchprefixedit
                     None,
-                    self.plus_store_selected,
-                    self.plus_store_selected_label,
-                    self.plus_coffee_selected,
-                    self.plus_coffee_selected_label,
-                    self.plus_blend_selected_label,
-                    self.plus_blend_selected_spec,
-                    self.plus_blend_selected_spec_labels,
+                    None,
+                    None,
+                    None,
+                    None,
+                    None,
+                    None,
+                    None,
                     weightOut,
                     volumeOut,
                     densityRoasted,
@@ -4469,45 +4402,7 @@ class editGraphDlg(ArtisanResizeablDialog):
         self.defect_percent()
 
     def checkWeightIn(self) -> None:
-        enough = True
-        enough_replacement = False
-        weightIn = 0.0
-        try:
-            weightIn = float(comma2dot(self.weightinedit.text()))
-        except Exception: # pylint: disable=broad-except
-            pass
-        if self.plus_amount_selected is not None:
-            try:
-                # convert weight to kg
-                weightUnit = self.unitsComboBox.currentText()
-                if weightUnit == 'kg':
-                    wc = weightIn
-                else:
-                    wc = convertWeight(weightIn,weight_units.index(weightUnit),weight_units.index('Kg'))
-                if wc > self.plus_amount_selected:
-                    enough = False
-            except Exception: # pylint: disable=broad-except
-                pass
-        if self.plus_amount_replace_selected is not None:
-            try:
-                # convert weight to kg
-                weightUnit = self.unitsComboBox.currentText()
-                if weightUnit == 'kg':
-                    wc = weightIn
-                else:
-                    wc = convertWeight(weightIn,weight_units.index(self.unitsComboBox.currentText()),weight_units.index('Kg'))
-                if wc <= self.plus_amount_replace_selected:
-                    enough_replacement = True
-            except Exception: # pylint: disable=broad-except
-                pass
-        if enough:
-            self.weightinedit.setStyleSheet('QLineEdit { font-weight: bold; }')
-        elif self.aw.app.darkmode:
-            self.weightinedit.setStyleSheet("""QLineEdit { font-weight: bold; background-color: #ad0427;  }""")
-        elif enough_replacement:
-            self.weightinedit.setStyleSheet("""QLineEdit { font-weight: bold; color: #0A5C90; }""")
-        else:
-            self.weightinedit.setStyleSheet("""QLineEdit { font-weight: bold; color: #CC0F50; }""")
+        self.weightinedit.setStyleSheet('QLineEdit { font-weight: bold; }')
 
     @pyqtSlot()
     def weightineditChanged(self) -> None:
@@ -4949,21 +4844,6 @@ class editGraphDlg(ArtisanResizeablDialog):
         self.aw.qmc.title_show_always = self.titleShowAlwaysFlag.isChecked()
         self.aw.container1_idx = self.tareComboBox.currentIndex() - 3
 
-        self.aw.qmc.plus_default_store = self.plus_default_store
-        self.aw.qmc.plus_store = self.plus_store_selected
-        self.aw.qmc.plus_store_label = self.plus_store_selected_label
-        self.aw.qmc.plus_coffee = self.plus_coffee_selected
-        self.aw.qmc.plus_coffee_label = self.plus_coffee_selected_label
-        if self.aw.qmc.plus_coffee is None:
-            self.aw.qmc.plus_coffee_label = None
-            self.aw.qmc.plus_blend_label = self.plus_blend_selected_label
-            self.aw.qmc.plus_blend_spec = self.plus_blend_selected_spec
-            self.aw.qmc.plus_blend_spec_labels = self.plus_blend_selected_spec_labels
-        else:
-            self.aw.qmc.plus_blend_label = None
-            self.aw.qmc.plus_blend_spec = None
-            self.aw.qmc.plus_blend_spec_labels = None
-
         # Update beans
         self.aw.qmc.beans = self.beansedit.toPlainText()
         #update weight
@@ -5189,14 +5069,6 @@ class editGraphDlg(ArtisanResizeablDialog):
             )
 
         self.clean_up()
-
-        if (self.start_recording_on_exit and
-                not self.aw.qmc.flagstart and
-                not self.aw.qmc.roastpropertiesAutoOpenFlag and
-                not self.aw.qmc.roastpropertiesAutoOpenDropFlag and
-                (self.aw.qmc.plus_coffee is not None or self.aw.qmc.plus_blend_spec is not None or self.aw.qmc.beans != '')):
-            # we trigger the START of the recording on leaving this dialog
-            self.aw.qmc.toggleRecorderSignal.emit()
 
         super().accept()
 

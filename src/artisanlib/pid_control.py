@@ -1276,6 +1276,7 @@ class PIDcontrol:
     #  2: S7
     #  3: TC4
     #  4: Kaleido
+    #  5: Kaleido Hybrid
     def externalPIDControl(self) -> int:
         # TC4 with PID firmware or MODBUS and SV register set or S7 and SV area set
         if self.aw.modbus.PID_device_ID != 0:
@@ -1284,9 +1285,30 @@ class PIDcontrol:
             return 2
         if (self.aw.qmc.device == 19 and self.aw.qmc.PIDbuttonflag):
             return 3
+        if (self.aw.qmc.device == 138 and self.aw.kaleidoHybridControl):
+            return 5
         if (self.aw.qmc.device == 138 and self.aw.kaleidoPID):
             return 4
         return 0
+
+    # Hybrid mode uses Machine PID (AH/TS) for warmup until CHARGE is marked
+    def kaleidoInWarmupPhase(self) -> bool:
+        return self.externalPIDControl() == 5 and self.aw.qmc.timeindex[0] == -1
+
+    # After CHARGE with a background loaded: leave Machine PID and activate Hybrid
+    def kaleidoEnterHybridOnCharge(self) -> None:
+        if self.aw.kaleido is None or not self.aw.qmc.Controlbuttonflag:
+            return
+        self.aw.kaleido.pidOFF()
+        # Hybrid will command HP; ensure heaters are enabled regardless of Start Heating UI state
+        self.aw.kaleido.ensureHeating(True)
+        self.aw.qmc.pid.off()
+        self.aw.hybrid_controller.activate()
+        self.pidActive = True
+        self.aw.buttonCONTROL.setStyleSheet(self.aw.pushbuttonstyles['PIDactive'])
+        backend = getattr(self.aw.hybrid_controller, 'backend_name', self.aw.hybridControlBackend)
+        self.aw.sendmessage(
+            QApplication.translate('Message','Hybrid Controller ON ({})').format(backend))
 
     # v is from [-min,max]
     def setEnergy(self, v:float) -> None:
@@ -1513,6 +1535,26 @@ class PIDcontrol:
             self.pidActive = True
             self.aw.qmc.pid.on()
             self.aw.buttonCONTROL.setStyleSheet(self.aw.pushbuttonstyles['PIDactive'])
+        elif self.aw.qmc.Controlbuttonflag and self.externalPIDControl() == 5 and self.aw.kaleido is not None:
+            # Kaleido Hybrid Controller: Machine PID warmup until CHARGE, then Hybrid
+            if self.kaleidoInWarmupPhase():
+                if send_command:
+                    self.aw.hybrid_controller.reset()
+                    self.aw.kaleido.pidON()
+                self.pidActive = True
+                self.aw.qmc.pid.on()
+                self.aw.buttonCONTROL.setStyleSheet(self.aw.pushbuttonstyles['PIDactive'])
+                self.aw.sendmessage(QApplication.translate('Message','Machine PID warmup ON'))
+            else:
+                if send_command:
+                    self.aw.kaleido.pidOFF()
+                    self.aw.qmc.pid.off()
+                    self.aw.hybrid_controller.activate()
+                self.pidActive = True
+                self.aw.buttonCONTROL.setStyleSheet(self.aw.pushbuttonstyles['PIDactive'])
+                backend = getattr(self.aw.hybrid_controller, 'backend_name', self.aw.hybridControlBackend)
+                self.aw.sendmessage(
+                    QApplication.translate('Message','Hybrid Controller ON ({})').format(backend))
         elif self.aw.qmc.Controlbuttonflag:
             # software PID
             if not self.pidActive: # only if not yet active!
@@ -1564,6 +1606,14 @@ class PIDcontrol:
             # Kaleido PID
             if send_command:
                 self.aw.kaleido.pidOFF()
+            self.pidActive = False
+            self.aw.qmc.pid.off()
+            self.aw.buttonCONTROL.setStyleSheet(self.aw.pushbuttonstyles['PID'])
+        elif self.aw.qmc.Controlbuttonflag and self.aw.kaleidoHybridControl and self.aw.kaleido is not None:
+            # Kaleido Hybrid Controller (warmup uses Machine PID; post-CHARGE uses Hybrid)
+            if send_command:
+                self.aw.kaleido.pidOFF()
+            self.aw.hybrid_controller.reset()
             self.pidActive = False
             self.aw.qmc.pid.off()
             self.aw.buttonCONTROL.setStyleSheet(self.aw.pushbuttonstyles['PID'])
@@ -1762,6 +1812,13 @@ class PIDcontrol:
                 self.aw.moveSVslider(sv,setValue=True)
             self.aw.kaleido.setSV(sv)
             self.sv = sv # remember last sv
+        elif self.externalPIDControl() == 5 and self.aw.kaleido is not None and self.kaleidoInWarmupPhase():
+            # Hybrid warmup: SV drives Machine PID target (TS)
+            if move and self.svSlider:
+                self.aw.moveSVslider(sv,setValue=True)
+            self.aw.kaleido.setSV(sv)
+            self.sv = sv # remember last sv
+            self.svValue = sv
         elif self.aw.qmc.Controlbuttonflag:
             # in all other cases if the "Control" flag is ticked: software PID
             if move and self.svSlider:

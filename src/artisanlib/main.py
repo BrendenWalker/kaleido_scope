@@ -25,8 +25,6 @@ from artisanlib import __version__
 from artisanlib import __revision__
 from artisanlib import __build__
 
-from artisanlib import __release_sponsor_name__
-
 import os
 import sys  # @UnusedImport
 import getpass
@@ -177,6 +175,7 @@ if TYPE_CHECKING:
     from artisanlib.bluedot import BlueDOT # pylint: disable=unused-import
     from artisanlib.mugma import Mugma # pylint: disable=unused-import
     from artisanlib.kaleido import KaleidoPort # pylint: disable=unused-import
+    from artisanlib.hybrid_controller import HybridController, HybridControllerConfig, create_controller_backend # pylint: disable=unused-import
     from artisanlib.orbiter import Orbiter # pylint: disable=unused-import
     from artisanlib.phases_canvas import tphasescanvas # pylint: disable=unused-import
     try:
@@ -208,12 +207,24 @@ from artisanlib.util import (appFrozen, uchr, decodeLocal, decodeLocalStrict, en
         deltaLabelPrefix, deltaLabelUTF8, deltaLabelBigPrefix, stringfromseconds, stringtoseconds,
         fromFtoCstrict, fromCtoFstrict, RoRfromFtoCstrict, RoRfromCtoFstrict,
         convertRoR, convertRoRstrict, convertTemp, path2url, toInt, toString, toList, toFloat,
-        toBool, toStringList, removeAll, application_name, application_viewer_name, application_organization_name,
-        application_organization_domain, application_desktop_file_name, getDataDirectory, getDocumentsDirectory, getAppPath, getResourcePath, debugLogLevelToggle,
+        toBool, toStringList, removeAll, application_name, application_viewer_name, application_display_name,
+        application_viewer_display_name, application_organization_name,
+        application_organization_domain, legacy_kaleido_application_organization_name,
+        legacy_kaleido_application_organization_domain, official_application_organization_name,
+        official_application_organization_domain,
+        application_desktop_file_name, getDataDirectory, getDocumentsDirectory, getAppPath, getResourcePath, debugLogLevelToggle,
         debugLogLevelActive, setDebugLogLevel, createGradient, natsort, setDeviceDebugLogLevel,
         comma2dot, is_proper_temp, weight_units, volume_units, float2float, float2str,
         convertWeight, convertVolume, rgba_colorname2argb_colorname, render_weight, serialize, deserialize, csv_load, exportProfile2CSV, findTPint,
         eventtime2string, toDim)
+
+from artisanlib.hybrid_controller import (
+    DEFAULT_CONTROL_BACKEND,
+    HybridController,
+    HybridControllerConfig,
+    create_controller_backend,
+    normalize_control_backend,
+)
 
 from artisanlib.qtsingleapplication import QtSingleApplication
 
@@ -532,49 +543,93 @@ if sys.platform.startswith('linux'):
 app = Artisan(app_args)
 
 
-# On the first run if there are legacy settings under "YourQuest" but no new settings under "artisan-scope" then the legacy settings
-# will be copied to the new settings location. Once settings exist under "artisan-scope" the legacy settings under "YourQuest" will
-# no longer be read or saved.  At start-up, versions of Artisan before to v2.0 will no longer share settings with versions v2.0 and after.
-# Settings can be shared among all versions of Artisan by explicitly saving and loading them using Help>Save/Load Settings.
+# Settings live under organization "kaleido-scope". On first run, if dest has no
+# Mode, copy from the first source that does (first match wins):
+#   1. artisan-kaleido (previous fork identity) - silent
+#   2. official upstream artisan-scope - show the one-time welcome dialog
+#   3. ancient YourQuest - show the one-time welcome dialog
+# After that this build only reads and writes kaleido-scope settings so
+# Kaleido-specific keys (e.g. kaleidoHybridControl) are not written to official
+# Artisan when switching versions.
+# Settings can be shared explicitly using Help>Save/Load Settings.
 
 settingsRelocated:bool = False
 try:
-    app.setApplicationName(application_name)                                #needed by QSettings() to store windows geometry in operating system
+    def _copy_qsettings(source:QSettings, dest:QSettings) -> None:
+        for key in source.allKeys():
+            dest.setValue(key, source.value(key))
 
-    app.setOrganizationName('YourQuest')                                    #needed by QSettings() to store windows geometry in operating system
-    app.setOrganizationDomain('p.code.google.com')                          #needed by QSettings() to store windows geometry in operating system
-    legacysettings = QSettings()
-    app.setOrganizationName(application_organization_name)                  #needed by QSettings() to store windows geometry in operating system
-    app.setOrganizationDomain(application_organization_domain)              #needed by QSettings() to store windows geometry in operating system
-    newsettings = QSettings()
+    def _open_qsettings(org:str, domain:str, app_name:str) -> QSettings:
+        saved_app_name = app.applicationName()
+        saved_org = app.organizationName()
+        saved_domain = app.organizationDomain()
+        app.setOrganizationName(org)
+        app.setOrganizationDomain(domain)
+        app.setApplicationName(app_name)
+        settings = QSettings()
+        app.setApplicationName(saved_app_name)
+        app.setOrganizationName(saved_org)
+        app.setOrganizationDomain(saved_domain)
+        return settings
 
-    # copy settings from legacy to new if newsettings do not exist, legacysettings do exist, and were not previously copied
-    if not newsettings.contains('Mode') and legacysettings.contains('Mode') and legacysettings.contains('_settingsCopied') and legacysettings.value('_settingsCopied') != 1:
-        settingsRelocated = True
-        # copy Artisan settings
-        for key in legacysettings.allKeys():
-            newsettings.setValue(key,legacysettings.value(key))
-        legacysettings.setValue('_settingsCopied', 1)  # prevents copying again in the future, this key not cleared by a Factory Reset
+    def _copy_app_and_viewer(source:QSettings, source_org:str, source_domain:str,
+            dest:QSettings, dest_viewer:QSettings) -> None:
+        _copy_qsettings(source, dest)
+        if not dest_viewer.contains('Mode'):
+            source_viewer = _open_qsettings(source_org, source_domain, application_viewer_name)
+            if source_viewer.contains('Mode'):
+                _copy_qsettings(source_viewer, dest_viewer)
+            del source_viewer
 
-        # copy ArtisanViewer settings
-        app.setApplicationName(application_viewer_name)                         #needed by QSettings() to store windows geometry in operating system
+    dest_settings = _open_qsettings(application_organization_name, application_organization_domain, application_name)
+    dest_viewer_settings = _open_qsettings(application_organization_name, application_organization_domain, application_viewer_name)
 
-        app.setOrganizationName('YourQuest')                                    #needed by QSettings() to store windows geometry in operating system
-        app.setOrganizationDomain('p.code.google.com')                          #needed by QSettings() to store windows geometry in operating system
-        legacysettings = QSettings()
-        app.setOrganizationName(application_organization_name)                  #needed by QSettings() to store windows geometry in operating system
-        app.setOrganizationDomain(application_organization_domain)              #needed by QSettings() to store windows geometry in operating system
-        newsettings = QSettings()
-        for key in legacysettings.allKeys():
-            newsettings.setValue(key,legacysettings.value(key))
-    del legacysettings   #free up memory?
-    del newsettings      #free up memory?
+    if not dest_settings.contains('Mode'):
+        previous_fork = _open_qsettings(
+            legacy_kaleido_application_organization_name,
+            legacy_kaleido_application_organization_domain,
+            application_name)
+        official_settings = _open_qsettings(
+            official_application_organization_name,
+            official_application_organization_domain,
+            application_name)
+        yourquest_settings = _open_qsettings('YourQuest', 'p.code.google.com', application_name)
+
+        if previous_fork.contains('Mode'):
+            _copy_app_and_viewer(
+                previous_fork,
+                legacy_kaleido_application_organization_name,
+                legacy_kaleido_application_organization_domain,
+                dest_settings, dest_viewer_settings)
+        elif official_settings.contains('Mode'):
+            settingsRelocated = True
+            _copy_app_and_viewer(
+                official_settings,
+                official_application_organization_name,
+                official_application_organization_domain,
+                dest_settings, dest_viewer_settings)
+        elif (yourquest_settings.contains('Mode') and yourquest_settings.contains('_settingsCopied')
+                and yourquest_settings.value('_settingsCopied') != 1):
+            settingsRelocated = True
+            _copy_app_and_viewer(
+                yourquest_settings, 'YourQuest', 'p.code.google.com',
+                dest_settings, dest_viewer_settings)
+            yourquest_settings.setValue('_settingsCopied', 1)  # not cleared by a Factory Reset
+
+        del previous_fork
+        del official_settings
+        del yourquest_settings
+
+    del dest_settings
+    del dest_viewer_settings
 except Exception: # pylint: disable=broad-except
     pass
 
 app.setApplicationName(application_name)                                #needed by QSettings() to store windows geometry in operating system
 app.setOrganizationName(application_organization_name)                  #needed by QSettings() to store windows geometry in operating system
 app.setOrganizationDomain(application_organization_domain)              #needed by QSettings() to store windows geometry in operating system
+app.setApplicationDisplayName(
+    application_viewer_display_name if app.artisanviewerMode else application_display_name)
 
 if sys.platform.startswith('linux'):
     app.setDesktopFileName(application_desktop_file_name)
@@ -1338,7 +1393,10 @@ class ApplicationWindow(QMainWindow):
         'seriallog', 'ser', 'modbus', 'extraMODBUStemps', 'extraMODBUStx', 's7', 'extraS7tx', 'ws', 'extraser', 'extracomport', 'extrabaudrate',
         'extrabytesize', 'extraparity', 'extrastopbits', 'extratimeout', 'hottop', 'santokerHost', 'santokerPort', 'santokerSerial', 'santokerBLE', 'santokerEventFlags', 'santoker', 'santokerR', 'lebrew_roastseeNEXT', 'thermoworksBlueDOT', 'fujipid', 'dtapid', 'pidcontrol', 'soundflag', 'recentRoasts', 'maxRecentRoasts',
         'mugmaHost','mugmaPort', 'mugma', 'mugma_default_host', 'shelly_3EMPro_host', 'shelly_PlusPlug_host',
-        'kaleido_default_host', 'kaleidoHost', 'kaleidoPort', 'kaleidoSerial', 'kaleidoPID', 'kaleido', 'kaleidoEventFlags', 'colorTrack_mean_window_size', 'colorTrack_median_window_size', 'ikawa',
+        'kaleido_default_host', 'kaleidoHost', 'kaleidoPort', 'kaleidoSerial', 'kaleidoPID', 'kaleidoHybridControl',
+        'hybridControlBackend', 'hybridHeaterKp', 'hybridHeaterKi', 'hybridHeaterKd', 'hybridFanKp', 'hybridFanKi', 'hybridFanKd',
+        'hybridHeaterSlew', 'hybridFanSlew', 'hybridRorAccelGain', 'hybridHeaterTrimLimit', 'hybridCrashRorMargin', 'hybridCrashFcGain',
+        'hybrid_controller', 'kaleido', 'kaleidoEventFlags', 'colorTrack_mean_window_size', 'colorTrack_median_window_size', 'ikawa',
         'lcdpaletteB', 'lcdpaletteF', 'extraeventsbuttonsflags', 'extraeventslabels', 'extraeventbuttoncolor', 'extraeventsactionstrings',
         'extraeventbuttonround', 'block_quantification_sampling_ticks', 'sampling_seconds_to_block_quantifiction', 'sampling_ticks_to_block_quantifiction', 'extraeventsactionslastvalue',
         'org_extradevicesettings', 'eventslidervalues', 'eventslidervisibilities', 'eventsliderKeyboardControl', 'eventsliderAlternativeLayout_default',
@@ -1363,8 +1421,8 @@ class ApplicationWindow(QMainWindow):
         'button_font_size_tiny', 'button_font_size_micro',
         'pushbuttonstyles_simulator', 'pushbuttonstyles', 'standard_button_tiny_height', 'standard_button_small_height', 'standard_button_height',
         'buttonONOFF', 'buttonSTARTSTOP', 'buttonFCs', 'buttonFCe', 'buttonSCs', 'buttonSCe', 'buttonRESET', 'buttonCHARGE', 'buttonDROP',
-        'buttonCONTROL', 'buttonEVENT', 'buttonSVp5', 'buttonSVp10', 'buttonSVp20', 'buttonSVm20', 'buttonSVm10', 'buttonSVm5', 'buttonDRY',
-        'buttonCOOL', 'lcd1', 'lcd2', 'lcd3', 'lcd4', 'lcd5',
+        'buttonCONTROL', 'buttonCOOLDOWN', 'buttonEVENT', 'buttonSVp5', 'buttonSVp10', 'buttonSVp20', 'buttonSVm20', 'buttonSVm10', 'buttonSVm5', 'buttonDRY',
+        'buttonCOOL', 'lcd1', 'lcd2', 'lcd3', 'lcd4', 'lcd5', 'kaleidoCooldownActive',
         'lcd6', 'lcd7', 'label2', 'label3', 'label4', 'label5', 'label6', 'label7', 'extraLCD1', 'extraLCD2', 'extraLCDlabel1', 'extraLCDlabel2',
         'extraLCDframe1', 'extraLCDframe2', 'extraLCDvisibility1', 'extraLCDvisibility2', 'extraCurveVisibility1', 'extraCurveVisibility2',
         'extraDelta1', 'extraDelta2', 'extraFill1', 'extraFill2', 'channel_tare_values', 'messagehist', 'eventlabel', 'eNumberSpinBox',
@@ -1394,7 +1452,7 @@ class ApplicationWindow(QMainWindow):
         'bbp_begin_to_bottom_ror', 'bbp_bottom_to_charge_ror', 'bbp_time_added_from_prev', 'bbp_begin', 'bbp_endroast_epoch_msec', 'bbp_endevents',
         'bbp_dropevents', 'bbp_dropbt', 'bbp_dropet', 'bbp_drop_to_end',
         'main_menu_actions_with_shortcuts', 'ui_mode', 'UIModeMenu',  'productionModeAction', 'defaultModeAction', 'expertModeAction', 'calculatorAction',
-        'helpAboutAction', 'checkUpdateAction', 'errorAction', 'messageAction', 'serialAction', 'platformAction', 'aboutQtAction',
+        'helpAboutAction', 'errorAction', 'messageAction', 'serialAction', 'platformAction', 'aboutQtAction',
         'helpDocumentationAction', 'KshortCAction',
         'plus_account', 'plus_remember_credentials', 'plus_email', 'plus_language', 'plus_user_id', 'plus_account_id',
         'plus_subscription', 'plus_rlimit', 'plus_used', 'plus_paidUntil' ]
@@ -1694,8 +1752,28 @@ class ApplicationWindow(QMainWindow):
         self.kaleidoPort:int = 80
         self.kaleidoSerial:bool = False # if True connection is via the main serial port
         self.kaleidoPID:bool = True # if True the external Kaleido PID is operated, otherwise the internal Artisan PID is active
+        self.kaleidoHybridControl:bool = False # if True the Hybrid Heater+Fan controller is active (mutually exclusive with kaleidoPID)
         self.kaleido:KaleidoPort|None = None # holds the Kaleido instance created on connect; reset to None on disconnect
         self.kaleidoEventFlags:list[bool] = [False, False, False, False, False, False, False ] # CHARGE, DRY, FCs, FCe, SCs, SCe, DROP
+        self.kaleidoCooldownActive:bool = False # idle air/drum cooldown until BT < 50°C
+
+        # Hybrid Controller settings
+        self.hybridControlBackend:str = DEFAULT_CONTROL_BACKEND  # "energy" | "mpc"
+        self.hybridHeaterKp:float = 3.0
+        self.hybridHeaterKi:float = 0.5
+        self.hybridHeaterKd:float = 0.1
+        self.hybridFanKp:float = 2.0
+        self.hybridFanKi:float = 0.3
+        self.hybridFanKd:float = 0.05
+        self.hybridHeaterSlew:float = 5.0
+        self.hybridFanSlew:float = 20.0
+        self.hybridRorAccelGain:float = 2.0
+        self.hybridHeaterTrimLimit:float = 20.0
+        self.hybridCrashRorMargin:float = 1.5
+        self.hybridCrashFcGain:float = 4.0
+        self.hybrid_controller:HybridController = create_controller_backend(
+            self.hybridControlBackend, self.buildHybridControllerConfig())
+        self.hybridDiagnostics:object|None = None  # latest HybridDiagnostics from sample loop
 
         # Orbiter
         self.orbiter:Orbiter|None = None # holds the Orbiter instance created on connect; reset to None on disconnect
@@ -2153,7 +2231,7 @@ class ApplicationWindow(QMainWindow):
         if platform.system() == 'Darwin':
             self.quitAction = QAction('Quit', self) # automatically translated by Qt Translators
         else:
-            self.quitAction = QAction(QApplication.translate('MAC_APPLICATION_MENU', 'Quit {0}').format(application_name), self)
+            self.quitAction = QAction(QApplication.translate('MAC_APPLICATION_MENU', 'Quit {0}').format(application_display_name), self)
         self.quitAction.setMenuRole(QAction.MenuRole.QuitRole)
         self.quitAction.setShortcut(QKeySequence.StandardKey.Quit)
         self.quitAction.triggered.connect(self.fileQuit)
@@ -2463,9 +2541,9 @@ class ApplicationWindow(QMainWindow):
         # HELP menu
 
         if self.app.artisanviewerMode:
-            self.helpAboutAction = QAction(QApplication.translate('MAC_APPLICATION_MENU', 'About {0}').format(application_viewer_name), self)
+            self.helpAboutAction = QAction(QApplication.translate('MAC_APPLICATION_MENU', 'About {0}').format(application_viewer_display_name), self)
         else:
-            self.helpAboutAction = QAction(QApplication.translate('MAC_APPLICATION_MENU', 'About {0}').format(application_name), self)
+            self.helpAboutAction = QAction(QApplication.translate('MAC_APPLICATION_MENU', 'About {0}').format(application_display_name), self)
         self.helpAboutAction.setMenuRole(QAction.MenuRole.AboutRole)
         self.helpAboutAction.triggered.connect(self.helpAbout)
         if QIcon.hasThemeIcon('help-about'):
@@ -2483,10 +2561,6 @@ class ApplicationWindow(QMainWindow):
 
         self.KshortCAction = QAction(QApplication.translate('Menu', 'Keyboard Shortcuts'), self)
         self.KshortCAction.triggered.connect(self.viewKshortcuts)
-
-        self.checkUpdateAction = QAction(QApplication.translate('Menu', 'Check for Updates'), self)
-        self.checkUpdateAction.setMenuRole(QAction.MenuRole.NoRole)
-        self.checkUpdateAction.triggered.connect(self.checkUpdate)
 
         self.errorAction = QAction(QApplication.translate('Menu', 'Errors'), self)
         self.errorAction.triggered.connect(self.viewErrorLog)
@@ -2999,6 +3073,18 @@ class ApplicationWindow(QMainWindow):
         self.buttonCONTROL.clicked.connect(self.PIDcontrol)
         if self.app.artisanviewerMode:
             self.buttonCONTROL.setVisible(False)
+
+        # Kaleido idle cooldown (visible only when ON + not recording)
+        self.buttonCOOLDOWN: QPushButton = QPushButton(QApplication.translate('Button', 'COOLDOWN'))
+        self.buttonCOOLDOWN.setFocusPolicy(Qt.FocusPolicy.NoFocus)
+        self.buttonCOOLDOWN.setStyleSheet(self.pushbuttonstyles['PID'])
+        self.buttonCOOLDOWN.setGraphicsEffect(self.makeShadow())
+        self.buttonCOOLDOWN.setCursor(QCursor(Qt.CursorShape.PointingHandCursor))
+        self.buttonCOOLDOWN.setMinimumHeight(self.standard_button_height)
+        self.buttonCOOLDOWN.setToolTip(QApplication.translate(
+            'Tooltip', 'Cool beans: air 100%, drum 10% until BT < 50°C, then all off'))
+        self.buttonCOOLDOWN.clicked.connect(self.toggleKaleidoCooldown)
+        self.buttonCOOLDOWN.setVisible(False)
 
         #create EVENT record button
         self.buttonEVENT: AuxEventPushButton = AuxEventPushButton(QApplication.translate('Button', 'EVENT'))
@@ -3655,6 +3741,8 @@ class ApplicationWindow(QMainWindow):
         self.level1layout.addSpacing(15)
         self.level1layout.addWidget(self.buttonCONTROL)
         self.level1layout.addSpacing(10)
+        self.level1layout.addWidget(self.buttonCOOLDOWN)
+        self.level1layout.addSpacing(10)
         self.level1layout.addWidget(self.lcd1)
         self.level1layout.setSpacing(0)
         self.level1layout.setContentsMargins(0,7,7,12) # left, top, right, bottom
@@ -3957,12 +4045,11 @@ class ApplicationWindow(QMainWindow):
 #        # provide information message to user about sharing settings at start-up
         if settingsRelocated:
             string =  QApplication.translate('Message','Welcome to version {0} of Artisan!').format(__version__) + '\n\n'
-            string += QApplication.translate('Message','This is a one time message to inform you about a change in Artisan.') + '\n\n'
-            string += QApplication.translate('Message','If you never run older versions of Artisan you can skip this message, the change does not affect you.') + '  '
-            string += QApplication.translate('Message','Artisan preserves all your configuration settings when you exit so they will automatically be available the next time you start Artisan.') + '  '
-            string += QApplication.translate('Message','Beginning with release v2.0, settings will no longer be automatically shared at start-up with versions before v2.0.') + '\n\n'
-            string += QApplication.translate('Message','Do not worry. Since this is the first time you opened this new version Artisan has already loaded your last used settings.') + '\n\n'
-            string += QApplication.translate('Message',"To share settings between this version and Artisan versions before v2.0 use 'Help>Save Settings' and 'Help>Load Settings'.") + '\n\n'
+            string += QApplication.translate('Message','This is a one time message to inform you about a change in Kaleido Scope.') + '\n\n'
+            string += QApplication.translate('Message','Kaleido Scope stores settings separately from official Artisan so Kaleido-specific options do not affect upstream Artisan when switching between versions.') + '  '
+            string += QApplication.translate('Message','Artisan preserves all your configuration settings when you exit so they will automatically be available the next time you start Artisan.') + '\n\n'
+            string += QApplication.translate('Message','Do not worry. Since this is the first time you opened Kaleido Scope it has already loaded your last used settings from official Artisan.') + '\n\n'
+            string += QApplication.translate('Message',"To share settings between Kaleido Scope and official Artisan use 'Help>Save Settings' and 'Help>Load Settings'.") + '\n\n'
             string += QApplication.translate('Message','Enjoy using Artisan, The Artisan Team')
             QMessageBox.information(self, QApplication.translate('Message','One time message about loading settings at start-up'),string)
 
@@ -4188,9 +4275,6 @@ class ApplicationWindow(QMainWindow):
         help_menu.addAction(self.aboutQtAction)
         help_menu.addAction(self.helpDocumentationAction)
         help_menu.addAction(self.KshortCAction)
-        if ui_mode in {UI_MODE.EXPERT, UI_MODE.DEFAULT}:
-            help_menu.addSeparator()
-            help_menu.addAction(self.checkUpdateAction)
         if ui_mode is UI_MODE.EXPERT:
             help_menu.addSeparator()
             help_menu.addAction(self.errorAction)
@@ -4711,7 +4795,7 @@ class ApplicationWindow(QMainWindow):
 
     def updateWindowTitle(self) -> None:
         try:
-            appTitle = f'{(application_viewer_name if self.app.artisanviewerMode else application_name)} {str(__version__)}'
+            appTitle = f'{(application_viewer_display_name if self.app.artisanviewerMode else application_display_name)} {str(__version__)}'
             dirtySign = '* ' if self.qmc.safesaveflag else ''
             if self.simulator is not None and self.simulatorpath:
                 # simulator running
@@ -4723,32 +4807,15 @@ class ApplicationWindow(QMainWindow):
                 # if not Simulator, Comparator, Designer, WheelGraph
                 if self.comparator is None and not self.qmc.designerflag and not self.qmc.wheelflag and self.qmc.ax is not None:
                     self.setWindowFilePath(self.curFile)
-            # no profile loaded
-            elif __release_sponsor_name__ != '': # pyright:ignore[reportUnnecessaryComparison]
-                self.setWindowTitle(f"{dirtySign}{appTitle} – {__release_sponsor_name__} ({QApplication.translate('About','Release Sponsor')})")
-                self.setWindowFilePath('')
             else:
                 self.setWindowTitle(f'{dirtySign}{appTitle}')
                 self.setWindowFilePath('')
         except Exception as e: # pylint: disable=broad-except
             _log.exception(e)
 
-    @staticmethod
-    def resetDonateCounter() -> None:
-        settings = QSettings()
-        settings.setValue('lastdonationpopup',int(libtime.time()))
-        settings.setValue('starts',0)
-        settings.sync()
-        if settings.status() != QSettings.Status.NoError:
-            _log.error('Failed to save lastdonationpopup settings')
-
     @pyqtSlot()
     def logStartupTime(self) -> None: # pylint: disable=no-self-use # used as slot
         _log.info('MODE: startup time: %.2f', libtime.process_time() - startup_time)
-
-    @pyqtSlot()
-    def donate(self) -> None:
-        pass
 
     @pyqtSlot(str)
     def setCanvasColor(self, c:str) -> None: # pylint: disable=no-self-use # used as slot
@@ -5143,14 +5210,8 @@ class ApplicationWindow(QMainWindow):
         d['roastUUID'] = roastUUID
         d['batchnr'] = batchnr
         d['batchprefix'] = batchprefix
-        d['plus_account'] = plus_account
-        d['plus_store'] = plus_store
-        d['plus_store_label'] = plus_store_label
-        d['plus_coffee'] = plus_coffee
-        d['plus_coffee_label'] = plus_coffee_label
-        d['plus_blend_label'] = plus_blend_label
-        d['plus_blend_spec'] = plus_blend_spec
-        d['plus_blend_spec_labels'] = plus_blend_spec_labels
+        del plus_account, plus_store, plus_store_label, plus_coffee, plus_coffee_label
+        del plus_blend_label, plus_blend_spec, plus_blend_spec_labels
         return d
 
     # recentRoast activated via NEW
@@ -5203,20 +5264,6 @@ class ApplicationWindow(QMainWindow):
                 self.qmc.color_system_idx = rr['colorSystem'] # type: ignore[unreachable]
 
         # Note: the background profile will not be changed if recent roast is activated from Roast Properties
-        if 'plus_store' in rr:
-            self.qmc.plus_store = rr['plus_store']
-        if 'plus_store_label' in rr:
-            self.qmc.plus_store_label = rr['plus_store_label']
-        if 'plus_coffee' in rr:
-            self.qmc.plus_coffee = rr['plus_coffee']
-        if 'plus_coffee_label' in rr:
-            self.qmc.plus_coffee_label = rr['plus_coffee_label']
-        if 'plus_blend_label' in rr:
-            self.qmc.plus_blend_label = rr['plus_blend_label']
-        if 'plus_blend_spec' in rr:
-            self.qmc.plus_blend_spec = rr['plus_blend_spec']
-        if 'plus_blend_spec_labels' in rr:
-            self.qmc.plus_blend_spec_labels = rr['plus_blend_spec_labels']
         self.sendmessage(QApplication.translate('Message',f"Recent roast properties '{self.recentRoastLabel(rr)}' set"))
 
     # returns the list of recentRoasts with the first entry with the given title, weight and weightunit removed
@@ -15498,43 +15545,6 @@ class ApplicationWindow(QMainWindow):
             if 'title' in profile:
                 self.qmc.title = decodeLocalStrict(profile['title'], self.qmc.title)
 
-#PLUS
-            if 'plus_store' in profile:
-                self.qmc.plus_store = decodeLocalStrict(profile['plus_store'])
-                if 'plus_store_label' in profile:
-                    self.qmc.plus_store_label = decodeLocalStrict(profile['plus_store_label'])
-                else:
-                    self.qmc.plus_store_label = None
-            else:
-                self.qmc.plus_store = None
-                self.qmc.plus_store_label = None
-            if 'plus_coffee' in profile:
-                self.qmc.plus_coffee = decodeLocalStrict(profile['plus_coffee'])
-                if 'plus_coffee_label' in profile:
-                    self.qmc.plus_coffee_label = decodeLocalStrict(profile['plus_coffee_label'])
-                else:
-                    self.qmc.plus_coffee_label = None
-            else:
-                self.qmc.plus_coffee = None
-                self.qmc.plus_coffee_label = None
-            if 'plus_blend_spec' in profile:
-                pbs = profile['plus_blend_spec']
-                self.qmc.plus_blend_spec = pbs if isinstance(pbs, dict) else None
-                if 'plus_blend_label' in profile:
-                    self.qmc.plus_blend_label = decodeLocalStrict(profile['plus_blend_label'])
-                else:
-                    self.qmc.plus_blend_label = None
-                if 'plus_blend_spec_labels' in profile:
-                    self.qmc.plus_blend_spec_labels = [decodeLocalStrict(l) for l in profile['plus_blend_spec_labels']]
-                else:
-                    self.qmc.plus_blend_spec_labels = None
-            else:
-                self.qmc.plus_blend_spec = None
-                self.qmc.plus_blend_spec_labels = None
-            if 'plus_sync_record_hash' in profile:
-                self.qmc.plus_sync_record_hash = decodeLocal(profile['plus_sync_record_hash'])
-            else:
-                self.qmc.plus_sync_record_hash = None
             if 'beans' in profile:
                 self.qmc.beans = decodeLocalStrict(profile['beans'])
             else:
@@ -16547,21 +16557,6 @@ class ApplicationWindow(QMainWindow):
             profile['title'] = encodeLocalStrict(self.qmc.title)
             profile['locale'] = self.locale_str
 
-#PLUS
-            if self.qmc.plus_store is not None:
-                profile['plus_store'] = encodeLocalStrict(self.qmc.plus_store)
-                if self.qmc.plus_store_label is not None:
-                    profile['plus_store_label'] = encodeLocalStrict(self.qmc.plus_store_label)
-            if self.qmc.plus_coffee is not None:
-                profile['plus_coffee'] = encodeLocalStrict(self.qmc.plus_coffee)
-                if self.qmc.plus_coffee_label is not None:
-                    profile['plus_coffee_label'] = encodeLocalStrict(self.qmc.plus_coffee_label)
-            if self.qmc.plus_blend_spec is not None:
-                profile['plus_blend_spec'] = self.qmc.plus_blend_spec
-                profile['plus_blend_label'] = encodeLocalStrict(self.qmc.plus_blend_label)
-                if self.qmc.plus_blend_spec_labels is not None:
-                    profile['plus_blend_spec_labels'] = [encodeLocalStrict(l) for l in self.qmc.plus_blend_spec_labels]
-
             profile['beans'] = encodeLocalStrict(self.qmc.beans)
             profile['weight'] = [self.qmc.weight[0],self.qmc.weight[1],encodeLocalStrict(self.qmc.weight[2], 'g')]
             profile['defects_weight'] = self.qmc.roasted_defects_weight
@@ -17292,6 +17287,22 @@ class ApplicationWindow(QMainWindow):
             self.santoker.send_msg(target,value)
 
 
+    def buildHybridControllerConfig(self) -> 'HybridControllerConfig':
+        return HybridControllerConfig(
+            heater_kp=self.hybridHeaterKp,
+            heater_ki=self.hybridHeaterKi,
+            heater_kd=self.hybridHeaterKd,
+            fan_kp=self.hybridFanKp,
+            fan_ki=self.hybridFanKi,
+            fan_kd=self.hybridFanKd,
+            heater_slew_pct_per_sec=self.hybridHeaterSlew,
+            fan_slew_pct_per_sec=self.hybridFanSlew,
+            ror_accel_gain=self.hybridRorAccelGain,
+            heater_trim_limit=self.hybridHeaterTrimLimit,
+            crash_ror_margin=self.hybridCrashRorMargin,
+            crash_fc_gain=self.hybridCrashFcGain,
+        )
+
     # kaleidoSendMessage() just sends out the message to the machine without waiting for a response
     @pyqtSlot(str,str)
     def kaleidoSendMessage(self, target:str, value:str) -> None:
@@ -17370,6 +17381,9 @@ class ApplicationWindow(QMainWindow):
                                     self.setExtraEventButtonStyleSignal.emit(lastbuttonpressed, 'pressed')
                                 else:
                                     self.setExtraEventButtonStyleSignal.emit(lastbuttonpressed, 'normal')
+                                # Start Heating (HS ON): enable Machine PID warmup in Hybrid pre-CHARGE phase
+                                if target == 'HS':
+                                    self.kaleidoStartHeating(bv)
                         elif etype>-1:
                             new_value = int(round(float(res)))
                             self.addEventSignal.emit(new_value, etype, True, False, False)
@@ -17379,6 +17393,109 @@ class ApplicationWindow(QMainWindow):
                 if etype == -1 and len(self.buttonlist)>lastbuttonpressed > -1:
                     # we unblock all signals emitted from this button until we received a response
                     self.buttonlist[lastbuttonpressed].blockSignals(False)
+
+    # When Start Heating turns ON during Hybrid pre-CHARGE, enable Machine PID warmup (SV→TS).
+    # Turning heating OFF does not change PID state (avoids surprising the operator mid-warmup).
+    def kaleidoStartHeating(self, on:bool) -> None:
+        if not on:
+            return
+        if self.kaleido is not None:
+            # Keep HS latched when automation believes heating should be on
+            self.kaleido.ensureHeating(True)
+        if (self.kaleidoHybridControl and self.qmc.Controlbuttonflag
+                and self.kaleido is not None
+                and self.pidcontrol.kaleidoInWarmupPhase()
+                and not self.pidcontrol.pidActive):
+            self.pidcontrol.pidOn()
+
+    # --- Kaleido idle cooldown (air 100% / drum 10% until BT < 50°C) ---
+
+    def kaleidoCooldownAvailable(self) -> bool:
+        """True when Kaleido is connected/monitoring but not recording a profile."""
+        return (
+            self.qmc.device == 138
+            and self.kaleido is not None
+            and self.qmc.flagon
+            and not self.qmc.flagstart
+        )
+
+    def updateKaleidoCooldownButton(self) -> None:
+        if self.app.artisanviewerMode:
+            self.buttonCOOLDOWN.setVisible(False)
+            return
+        show = self.kaleidoCooldownAvailable() or self.kaleidoCooldownActive
+        self.buttonCOOLDOWN.setVisible(show)
+        if self.kaleidoCooldownActive:
+            self.buttonCOOLDOWN.setStyleSheet(self.pushbuttonstyles['PIDactive'])
+            self.buttonCOOLDOWN.setText(QApplication.translate('Button', 'COOLING…'))
+        else:
+            self.buttonCOOLDOWN.setStyleSheet(self.pushbuttonstyles['PID'])
+            self.buttonCOOLDOWN.setText(QApplication.translate('Button', 'COOLDOWN'))
+
+    @pyqtSlot(bool)
+    @pyqtSlot()
+    def toggleKaleidoCooldown(self, _:bool = False) -> None:
+        if self.kaleidoCooldownActive:
+            self.stopKaleidoCooldown(turn_off=True)
+            self.sendmessage(QApplication.translate('Message', 'Kaleido cooldown cancelled — controls off'))
+            return
+        if not self.kaleidoCooldownAvailable():
+            self.sendmessage(QApplication.translate(
+                'Message', 'Cooldown available only while connected and idle (ON, not recording)'))
+            return
+        self.startKaleidoCooldown()
+
+    def startKaleidoCooldown(self) -> None:
+        if self.kaleido is None:
+            return
+        # Leave any active PID/Hybrid control before commanding cooldown actuators
+        try:
+            if self.pidcontrol.pidActive:
+                self.pidcontrol.pidOff()
+        except Exception as e:  # pylint: disable=broad-except
+            _log.exception(e)
+        self.kaleidoCooldownActive = True
+        self.kaleido.applyCooldownActuators()
+        # Sync preset sliders: 0=FC, 1=RC, 3=HP
+        self.addRawEventSignal.emit(100, 100.0, 0, False, True, False)
+        self.addRawEventSignal.emit(10, 10.0, 1, False, True, False)
+        self.addRawEventSignal.emit(0, 0.0, 3, False, True, False)
+        self.updateKaleidoCooldownButton()
+        self.sendmessage(QApplication.translate(
+            'Message', 'Kaleido cooldown: air 100%, drum 10% until BT < 50°C'))
+
+    def tickKaleidoCooldown(self, bt: float) -> None:
+        """Sample-loop tick: hold cooldown actuators until BT target, then shut down."""
+        if not self.kaleidoCooldownActive or self.kaleido is None:
+            return
+        # Abort if recording started or connection dropped mid-cooldown
+        if self.qmc.flagstart or not self.qmc.flagon:
+            self.stopKaleidoCooldown(turn_off=True)
+            return
+        try:
+            from artisanlib.util import fromCtoFstrict
+            threshold = 50.0 if self.qmc.mode == 'C' else float(fromCtoFstrict(50.0))
+            if bt is not None and bt > -1 and bt < threshold:
+                self.stopKaleidoCooldown(turn_off=True)
+                self.sendmessage(QApplication.translate(
+                    'Message', 'Kaleido cooldown complete — all controls off'))
+                return
+            self.kaleido.applyCooldownActuators()
+        except Exception as e:  # pylint: disable=broad-except
+            _log.exception(e)
+
+    def stopKaleidoCooldown(self, turn_off: bool = True) -> None:
+        was_active = self.kaleidoCooldownActive
+        self.kaleidoCooldownActive = False
+        if turn_off and self.kaleido is not None and was_active:
+            try:
+                self.kaleido.allControlsOff()
+                self.addRawEventSignal.emit(0, 0.0, 0, False, True, False)
+                self.addRawEventSignal.emit(0, 0.0, 1, False, True, False)
+                self.addRawEventSignal.emit(0, 0.0, 3, False, True, False)
+            except Exception as e:  # pylint: disable=broad-except
+                _log.exception(e)
+        self.updateKaleidoCooldownButton()
 
     # removes window geometry and splitter settings from the given settings
     @staticmethod
@@ -17604,6 +17721,25 @@ class ApplicationWindow(QMainWindow):
             self.kaleidoPort = toInt(settings.value('kaleidoPort',self.kaleidoPort))
             self.kaleidoSerial = toBool(settings.value('kaleidoSerial',self.kaleidoSerial))
             self.kaleidoPID = toBool(settings.value('kaleidoPID',self.kaleidoPID))
+            self.kaleidoHybridControl = toBool(settings.value('kaleidoHybridControl',self.kaleidoHybridControl))
+            if self.kaleidoHybridControl:
+                self.kaleidoPID = False
+            self.hybridControlBackend = normalize_control_backend(
+                toString(settings.value('hybridControlBackend', self.hybridControlBackend)))
+            self.hybridHeaterKp = toFloat(settings.value('hybridHeaterKp',self.hybridHeaterKp))
+            self.hybridHeaterKi = toFloat(settings.value('hybridHeaterKi',self.hybridHeaterKi))
+            self.hybridHeaterKd = toFloat(settings.value('hybridHeaterKd',self.hybridHeaterKd))
+            self.hybridFanKp = toFloat(settings.value('hybridFanKp',self.hybridFanKp))
+            self.hybridFanKi = toFloat(settings.value('hybridFanKi',self.hybridFanKi))
+            self.hybridFanKd = toFloat(settings.value('hybridFanKd',self.hybridFanKd))
+            self.hybridHeaterSlew = toFloat(settings.value('hybridHeaterSlew',self.hybridHeaterSlew))
+            self.hybridFanSlew = toFloat(settings.value('hybridFanSlew',self.hybridFanSlew))
+            self.hybridRorAccelGain = toFloat(settings.value('hybridRorAccelGain',self.hybridRorAccelGain))
+            self.hybridHeaterTrimLimit = toFloat(settings.value('hybridHeaterTrimLimit',self.hybridHeaterTrimLimit))
+            self.hybridCrashRorMargin = toFloat(settings.value('hybridCrashRorMargin',self.hybridCrashRorMargin))
+            self.hybridCrashFcGain = toFloat(settings.value('hybridCrashFcGain',self.hybridCrashFcGain))
+            self.hybrid_controller = create_controller_backend(
+                self.hybridControlBackend, self.buildHybridControllerConfig())
             if settings.contains('kaleidoEventFlags'):
                 self.kaleidoEventFlags = [toBool(x) for x in toList(settings.value('kaleidoEventFlags',self.kaleidoEventFlags))]
             self.mugmaHost = toString(settings.value('mugmaHost',self.mugmaHost))
@@ -18445,19 +18581,6 @@ class ApplicationWindow(QMainWindow):
 #                self.qmc.beansize = toFloat(settings.value('beansize',self.qmc.beansize)) # retired
             self.qmc.beansize_min = toInt(settings.value('beansize_min',self.qmc.beansize_min))
             self.qmc.beansize_max = toInt(settings.value('beansize_max',self.qmc.beansize_max))
-            self.qmc.plus_default_store = settings.value('plus_default_store',self.qmc.plus_default_store)
-            if filename is None and settings.contains('plus_custom_blend_name'):
-                plus_custom_blend_name = toString(settings.value('plus_custom_blend_name',''))
-                plus_custom_blend_coffees = [toString(x) for x in toList(settings.value('plus_custom_blend_coffees', []))]
-                plus_custom_blend_ratios = [toFloat(x) for x in toList(settings.value('plus_custom_blend_ratios', []))]
-                if plus_custom_blend_name != '' and len(plus_custom_blend_coffees)>1 and len(plus_custom_blend_ratios) == len(plus_custom_blend_coffees):
-                    self.qmc.plus_custom_blend = {
-                        'name': plus_custom_blend_name,
-                        'coffees': plus_custom_blend_coffees,
-                        'ratios': plus_custom_blend_ratios,
-                    }
-                else:
-                    self.qmc.plus_custom_blend = None
             settings.endGroup()
 #--- END GROUP RoastProperties
 
@@ -19627,6 +19750,20 @@ class ApplicationWindow(QMainWindow):
             self.settingsSetValue(settings, default_settings, 'kaleidoPort',self.kaleidoPort, read_defaults)
             self.settingsSetValue(settings, default_settings, 'kaleidoSerial',self.kaleidoSerial, read_defaults)
             self.settingsSetValue(settings, default_settings, 'kaleidoPID',self.kaleidoPID, read_defaults)
+            self.settingsSetValue(settings, default_settings, 'kaleidoHybridControl',self.kaleidoHybridControl, read_defaults)
+            self.settingsSetValue(settings, default_settings, 'hybridControlBackend',self.hybridControlBackend, read_defaults)
+            self.settingsSetValue(settings, default_settings, 'hybridHeaterKp',self.hybridHeaterKp, read_defaults)
+            self.settingsSetValue(settings, default_settings, 'hybridHeaterKi',self.hybridHeaterKi, read_defaults)
+            self.settingsSetValue(settings, default_settings, 'hybridHeaterKd',self.hybridHeaterKd, read_defaults)
+            self.settingsSetValue(settings, default_settings, 'hybridFanKp',self.hybridFanKp, read_defaults)
+            self.settingsSetValue(settings, default_settings, 'hybridFanKi',self.hybridFanKi, read_defaults)
+            self.settingsSetValue(settings, default_settings, 'hybridFanKd',self.hybridFanKd, read_defaults)
+            self.settingsSetValue(settings, default_settings, 'hybridHeaterSlew',self.hybridHeaterSlew, read_defaults)
+            self.settingsSetValue(settings, default_settings, 'hybridFanSlew',self.hybridFanSlew, read_defaults)
+            self.settingsSetValue(settings, default_settings, 'hybridRorAccelGain',self.hybridRorAccelGain, read_defaults)
+            self.settingsSetValue(settings, default_settings, 'hybridHeaterTrimLimit',self.hybridHeaterTrimLimit, read_defaults)
+            self.settingsSetValue(settings, default_settings, 'hybridCrashRorMargin',self.hybridCrashRorMargin, read_defaults)
+            self.settingsSetValue(settings, default_settings, 'hybridCrashFcGain',self.hybridCrashFcGain, read_defaults)
             self.settingsSetValue(settings, default_settings, 'kaleidoEventFlags',self.kaleidoEventFlags, read_defaults)
             self.settingsSetValue(settings, default_settings, 'mugmaHost',self.mugmaHost, read_defaults)
             self.settingsSetValue(settings, default_settings, 'mugmaPort',self.mugmaPort, read_defaults)
@@ -20189,14 +20326,6 @@ class ApplicationWindow(QMainWindow):
             self.settingsSetValue(settings, default_settings, 'machinesetup',self.qmc.machinesetup, read_defaults)
             self.settingsSetValue(settings, default_settings, 'beansize_min',self.qmc.beansize_min, read_defaults)
             self.settingsSetValue(settings, default_settings, 'beansize_max',self.qmc.beansize_max, read_defaults)
-            if filename is None:
-                # we don't export plus default store and custom blend data to external settings file as the custom blend is considered temporary
-                self.settingsSetValue(settings, default_settings, 'plus_default_store',self.qmc.plus_default_store, read_defaults)
-                if self.qmc.plus_custom_blend is not None:
-                    cb = self.qmc.plus_custom_blend
-                    self.settingsSetValue(settings, default_settings, 'plus_custom_blend_name', cb['name'], read_defaults)
-                    self.settingsSetValue(settings, default_settings, 'plus_custom_blend_coffees', cb['coffees'], read_defaults)
-                    self.settingsSetValue(settings, default_settings, 'plus_custom_blend_ratios', cb['ratios'], read_defaults)
             #remove pre v2.0 settings no longer used
             try:
                 if settings.contains('organization'):
@@ -21044,9 +21173,6 @@ class ApplicationWindow(QMainWindow):
         # UUID
         if 'roastUUID' in profile:
             res['roastUUID'] = profile['roastUUID']
-        # plus_coffee
-        if 'plus_coffee' in profile:
-            res['plus_coffee'] = profile['plus_coffee']
         # title
         if 'title' in profile:
             title_str = decodeLocal(profile['title'])
@@ -23792,8 +23918,6 @@ class ApplicationWindow(QMainWindow):
     @pyqtSlot()
     @pyqtSlot(bool)
     def helpAbout(self, _:bool = False) -> None:
-        # pylint: disable=consider-using-f-string
-        coredevelopers:str = '<br>Rafael Cobo, Marko Luther &amp; Dave Baxter'
         box = QMessageBox(self)
 
         #create a html QString
@@ -23802,7 +23926,7 @@ class ApplicationWindow(QMainWindow):
         build:str = ''
         if __build__ != '0': # pyright:ignore[reportUnnecessaryComparison]
             build = ' build ' + __build__
-        name:str = (application_viewer_name if self.app.artisanviewerMode else application_name)
+        name:str = (application_viewer_display_name if self.app.artisanviewerMode else application_display_name)
         otherlibs:str = ''
         try:
             from Phidget22.Phidget import Phidget as PhidgetDriver # type: ignore[import-untyped]
@@ -23820,33 +23944,18 @@ class ApplicationWindow(QMainWindow):
             otherlibs += ', Yoctopuce ' + yocto_version
         except Exception as e: # pylint: disable=broad-except
             _log.exception(e)
+        revision:str = f' ({str(__revision__)})' if str(__revision__) != '' else ''
+        github:str = '<a href="https://github.com/BrendenWalker/kaleido_scope">https://github.com/BrendenWalker/kaleido_scope</a>'
+        license_link:str = '<a href="http://www.gnu.org/copyleft/gpl.html">GNU Public Licence (GPLv3.0)</a>'
         box.about(self,
                 QApplication.translate('About', 'About'),
-                """<h2>{0} {1}{14}{2}</h2>
+                f"""<h2>{name} {__version__}{build}{revision}</h2>
                 <p>
-                <small>Python {3}, Qt {4}, PyQt {5}, Matplotlib {6}, NumPy {7}, SciPy {8}, pymodbus {11}{15}</small>
+                <small>Python {platform.python_version()}, Qt {qVersion}, PyQt {PYQT_VERSION_STR}, Matplotlib {mpl.__version__}, NumPy {numpy.__version__}, SciPy {SCIPY_VERSION_STR}, pymodbus {PYMODBUS_VERSION_STR}{otherlibs}</small>
                 </p>
-                <p>{16}</p>
-                <p><b>{9}</b><small>{10}</small></p>
-                <p><b>{12}</b><br><small>{13}</small></p>
-                """.format( # noqa: UP030
-                name,
-                __version__,
-                (f' ({str(__revision__)})' if str(__revision__) != '' else ''),
-                platform.python_version(),
-                qVersion,
-                PYQT_VERSION_STR,
-                mpl.__version__,
-                numpy.__version__,
-                SCIPY_VERSION_STR,
-                QApplication.translate('About', 'Core Developers'),
-                coredevelopers,
-                PYMODBUS_VERSION_STR,
-                QApplication.translate('About', 'License'),
-                '<a href="http://www.gnu.org/copyleft/gpl.html">GNU Public Licence (GPLv3.0)</a>',
-                build,
-                otherlibs, # pyright:ignore[reportUnknownArgumentType]
-                '<a href="https://artisan-scope.org">https://artisan-scope.org</a>'))
+                <p>{github}</p>
+                <p><b>{QApplication.translate('About', 'License')}</b><br><small>{license_link}</small></p>
+                """)
 
     @pyqtSlot()
     @pyqtSlot(bool)
@@ -23857,52 +23966,7 @@ class ApplicationWindow(QMainWindow):
     @pyqtSlot()
     @pyqtSlot(bool)
     def helpHelp(self, _:bool = False) -> None:  # pylint: disable=no-self-use # used as slot
-        QDesktopServices.openUrl(QUrl('https://artisan-scope.org/help/', QUrl.ParsingMode.TolerantMode))
-
-    @pyqtSlot()
-    @pyqtSlot(bool)
-    def checkUpdate(self, _:bool = False) -> None:
-        update_url = '<a href="https://artisan-scope.org">https://artisan-scope.org</a>'
-        update_str = QApplication.translate('About', 'There was a problem retrieving the latest version information.  Please check your Internet connection, try again later, or check manually.')
-        import json
-        import json.decoder
-        try:
-            import requests
-            r = requests.get('https://api.github.com/repos/artisan-roaster-scope/artisan/releases/latest', timeout=(2,4))
-            if r.status_code != 204 and r.headers['content-type'].strip().startswith('application/json'):
-                response = r.json()
-                if 'tag_name' in response:
-                    tag_name = r.json()['tag_name']
-                    match = re.search(r'[\d\.]+',tag_name)
-                    if match is not None:
-                        latest = match.group(0)
-                        if latest > __version__:
-                            update_str = QApplication.translate('About', 'A new release is available.')
-                            update_str += '<br/><a href="https://github.com/artisan-roaster-scope/artisan/blob/master/wiki/ReleaseHistory.md">'
-                            update_str +=  QApplication.translate('About', 'Show Change list')
-                            update_str += '<br/><a href="https://github.com/artisan-roaster-scope/artisan/releases/tag/' + str(tag_name) + '">'
-                            update_str +=  QApplication.translate('About', 'Download Release') + ' ' + str(tag_name)
-                        elif latest == __version__ :
-                            update_str = QApplication.translate('About', 'You are using the latest release.')
-                        elif latest < __version__:
-                            update_str = QApplication.translate('About', 'You are using a beta continuous build.')
-                            update_str += '<br/><br/>' + QApplication.translate('About', 'You will see a notice here once a new official release is available.')
-        except json.decoder.JSONDecodeError as e:
-            if not e.doc:
-                _log.error('Empty response in checkUpdate.')
-            else:
-                _log.error("Decoding error at char %s (line %s, col %s): '%s'", e.pos, e.lineno, e.colno, e.doc)
-        except ValueError:
-            _log.error('checkUpdate response content is not valid JSON')
-        except Exception as ex: # pylint: disable=broad-except
-            _log.exception(ex)
-            _a, _b, exc_tb = sys.exc_info()
-            self.qmc.adderror((QApplication.translate('Error Message','Exception:') + ' checkUpdate() {0}').format(str(ex)),getattr(exc_tb, 'tb_lineno', '?'))
-
-        box = QMessageBox(self)
-        box.about(self,
-                QApplication.translate('About', 'Update status'),
-                f"""<p>{update_str}</p>{update_url}""")
+        QDesktopServices.openUrl(QUrl('https://github.com/BrendenWalker/kaleido_scope', QUrl.ParsingMode.TolerantMode))
 
     def applicationscreenshot(self) -> None:
         imag = self.grab()
@@ -24873,10 +24937,10 @@ class ApplicationWindow(QMainWindow):
     def editgraph(self, _:bool = False) -> None:
         self.open_roast_properties_dialog()
 
-    def open_roast_properties_dialog(self, start_recording_on_exit:bool=False) -> None:
+    def open_roast_properties_dialog(self) -> None:
         if self.editgraphdialog is not False and self.editgraphdialog is None: # Roast Properties dialog is not blocked!
             from artisanlib.roast_properties import editGraphDlg
-            self.editgraphdialog = editGraphDlg(self,self,self.editGraphDlg_activeTab,start_recording_on_exit)
+            self.editgraphdialog = editGraphDlg(self,self,self.editGraphDlg_activeTab)
             self.editgraphdialog.show()
 
     @pyqtSlot()
@@ -25366,7 +25430,7 @@ class ApplicationWindow(QMainWindow):
                         'Title': f'{batch_nr_str}{self.qmc.title}',
                         'Author': getpass.getuser(),
                         'Description': f'Artisan Roast Profile {batch_nr_str}{self.qmc.title}',
-                        'Software': f'Artisan v{__version__}, https://artisan-scope.org/'
+                        'Software': f'Kaleido Scope v{__version__}, https://github.com/BrendenWalker/kaleido_scope'
                     }
                 else:
                     metadata = None
@@ -25419,7 +25483,7 @@ class ApplicationWindow(QMainWindow):
                             'Author': getpass.getuser(),
                             'Subject': f'Artisan Roast Profile {batch_nr_str}{self.qmc.title}',
                             'Keywords': ', '.join(filter(None, ['Artisan', 'Roast Profile', batch_nr_str])),
-                            'Creator': f'Artisan v{__version__}, https://artisan-scope.org/'
+                            'Creator': f'Kaleido Scope v{__version__}, https://github.com/BrendenWalker/kaleido_scope'
                             }
                 else: # SVG
                     metadata = {
@@ -25427,7 +25491,7 @@ class ApplicationWindow(QMainWindow):
                             'Creator': getpass.getuser(),
                             'Description': f'Artisan Roast Profile {batch_nr_str}{self.qmc.title}',
                             'Keywords': ', '.join(filter(None, ['Artisan', 'Roast Profile', batch_nr_str])),
-                            'Publisher': f'Artisan v{__version__}, https://artisan-scope.org/'
+                            'Publisher': f'Kaleido Scope v{__version__}, https://github.com/BrendenWalker/kaleido_scope'
                     }
                     if self.curFile is not None:
                         metadata['Source'] = Path(self.curFile).name
@@ -26803,7 +26867,7 @@ def excepthook(excType:type, excValue:BaseException, tracebackobj:'TracebackType
 #    logFile = 'simple.log'
     notice = \
         """An unhandled exception occurred. Please report the problem on Github:<br>"""\
-        """<a href='https://github.com/artisan-roaster-scope/artisan/issues'>https://github.com/artisan-roaster-scope/artisan/issues</a><br><br>"""\
+        """<a href='https://github.com/BrendenWalker/kaleido_scope/issues'>https://github.com/BrendenWalker/kaleido_scope/issues</a><br><br>"""\
         """When reporting this issue, please include your settings file (export <br>"""\
         """via menu Help >> Save Settings) and the details below.<br><br>"""\
         """An entry has been written to the error log (menu Help >> Error).<br><br>"""

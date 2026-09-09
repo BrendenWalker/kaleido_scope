@@ -19,9 +19,6 @@ from artisanlib import __version__
 from artisanlib import __revision__
 from artisanlib import __build__
 
-from artisanlib import __release_sponsor_domain__
-from artisanlib import __release_sponsor_url__
-
 #import gc
 import time as libtime
 import os
@@ -74,7 +71,7 @@ from PyQt6.QtWidgets import (QApplication, QWidget, QMessageBox,
                          QSizePolicy,
                          QMenu)
 from PyQt6.QtGui import (QAction, QImage,
-                            QColor, QDesktopServices,
+                            QColor,
                             QCursor)
 from PyQt6.QtCore import (QLocale, pyqtSignal, pyqtSlot,
                           QTimer, QSettings,
@@ -1349,10 +1346,6 @@ class tgraphcanvas(QObject):
         self.roastpropertiesflag:int = 1  #resets roast properties if not zero
         self.roastpropertiesAutoOpenFlag:int = 0  #open roast properties dialog on CHARGE if not zero
         self.roastpropertiesAutoOpenDropFlag:int = 0  #open roast properties dialog on DROP if not zero
-
-        # if True, reminds user to set beans and open Roast Properties once when beans are empty
-        # this flag is reset after the warning dialog popped up once and is set to True again on OFF and
-        self.plus_beans_reminder_on_start:bool = True
 
         self.title:str = QApplication.translate('Scope Title', 'Roaster Scope')
         self.title_show_always:bool = False
@@ -4120,9 +4113,6 @@ class tgraphcanvas(QObject):
                     if isinstance(fig, Figure):
                         s = fig.get_size_inches()*fig.dpi
                         if event.x > s[0]*2/3 and event.y > s[1]*2/3:
-                            if not self.flagstart and not self.flagon and self.backgroundprofile is None and __release_sponsor_domain__ and __release_sponsor_url__:
-                                QDesktopServices.openUrl(QUrl(__release_sponsor_url__, QUrl.ParsingMode.TolerantMode))
-                                return
                             if self.backgroundprofile is not None:
                                 # toggle background if right top corner above canvas where the subtitle is clicked
                                 self.background = not self.background
@@ -5115,6 +5105,43 @@ class tgraphcanvas(QObject):
                         if self.autoFCsFlag and self.autoFCsenabled and self.TPalarmtimeindex and self.timeindex[0] > -1 and not self.timeindex[2] and not self.timeindex[3] and sample_temp2[-1] >= self.phases[2]:
                             # after DRY (if FCs event not yet set) check for BT exceeding FC-min as specified in the phases dialog
                             self.markFCsSignal.emit(False) # queued
+
+                    # Kaleido idle cooldown (ON, not recording): air 100% / drum 10% until BT < 50°C
+                    if self.aw.kaleidoCooldownActive and self.aw.kaleido is not None:
+                        try:
+                            self.aw.tickKaleidoCooldown(st2)
+                        except Exception as e: # pylint: disable=broad-except
+                            _log.exception(e)
+
+                    # Kaleido Hybrid Controller: M6 RoR-shape + thermal twin + phase HP/FC (after CHARGE)
+                    if (not self.aw.kaleidoCooldownActive and self.Controlbuttonflag
+                            and self.aw.pidcontrol.pidActive and
+                            self.aw.pidcontrol.externalPIDControl() == 5 and self.aw.kaleido is not None and
+                            self.timeindex[0] > -1):
+                        try:
+                            from artisanlib.hybrid_controller import compute_ror_acceleration
+                            ror_accel = 0.0
+                            if len(sample_unfiltereddelta2) >= 2 and len(sample_timex) >= 2:
+                                ror_dt = sample_timex[-1] - sample_timex[-2]
+                                ror_samples = [v for v in sample_unfiltereddelta2[-2:] if v is not None]
+                                if len(ror_samples) >= 2:
+                                    ror_accel = compute_ror_acceleration(ror_samples, ror_dt)
+                            hp, fc = self.aw.hybrid_controller.update(
+                                st2, st1, rateofchange2plot, ror_accel,
+                                self.timeindex, tx,
+                                et_ror=rateofchange1plot if rateofchange1plot is not None else 0.0)
+                            self.aw.kaleido.setHeaterFan(hp, fc)
+                            # Live diagnostics for Hybrid/MPC (status + field A/B tools)
+                            try:
+                                self.aw.hybridDiagnostics = getattr(
+                                    self.aw.hybrid_controller, 'diagnostics', None)
+                            except Exception:  # pylint: disable=broad-except
+                                self.aw.hybridDiagnostics = None
+                            # sync Kaleido preset sliders: 0=FC, 3=HP
+                            self.aw.addRawEventSignal.emit(fc, float(fc), 0, False, True, False)
+                            self.aw.addRawEventSignal.emit(hp, float(hp), 3, False, True, False)
+                        except Exception as e: # pylint: disable=broad-except
+                            _log.exception(e)
 
                     #process active quantifiers
                     try:
@@ -9519,9 +9546,6 @@ class tgraphcanvas(QObject):
                                 titleB = self.titleB
                             else:
                                 titleB = f'{self.roastbatchprefixB}{self.roastbatchnrB} {self.titleB}'
-                        elif __release_sponsor_domain__ != '':
-                            sponsor = QApplication.translate('About','sponsored by {}').format(__release_sponsor_domain__)
-                            titleB = f'\n{sponsor}'
 
                     # extra event names with substitution of event names applied
                     extraname1_subst = self.extraname1[:]
@@ -13518,6 +13542,7 @@ class tgraphcanvas(QObject):
             self.aw.updateControlsVisibility()
             self.aw.update_extraeventbuttons_visibility()
             self.aw.updateExtraButtonsVisibility()
+            self.aw.updateKaleidoCooldownButton()
             self.aw.updateSlidersVisibility() # update visibility of sliders based on the users preference
             self.aw.update_minieventline_visibility()
             self.aw.pidcontrol.activateONOFFeasySV(self.aw.pidcontrol.svButtons and self.aw.buttonONOFF.isVisible())
@@ -13682,6 +13707,10 @@ class tgraphcanvas(QObject):
             self.aw.updateSlidersVisibility() # update visibility of sliders based on the users preference
             self.aw.update_minieventline_visibility()
             self.aw.updateExtraButtonsVisibility()
+            if self.aw.kaleidoCooldownActive:
+                self.aw.stopKaleidoCooldown(turn_off=True)
+            else:
+                self.aw.updateKaleidoCooldownButton()
             self.aw.pidcontrol.activateONOFFeasySV(False)
             self.StopAsyncSamplingAction()
             self.aw.enableEditMenus()
@@ -13744,7 +13773,6 @@ class tgraphcanvas(QObject):
         if self.flagon:
             try:
                 # reset
-                self.plus_beans_reminder_on_start = True
 
                 # activate "Stopping Mode" to ensure that sample() is not resetting the timer now (independent of the flagstart state)
 
@@ -14314,6 +14342,11 @@ class tgraphcanvas(QObject):
 
             self.aw.update_extraeventbuttons_visibility()
             self.aw.updateExtraButtonsVisibility()
+            # Cooldown is idle-only; cancel if recording starts
+            if self.aw.kaleidoCooldownActive:
+                self.aw.stopKaleidoCooldown(turn_off=False)
+            else:
+                self.aw.updateKaleidoCooldownButton()
 
             if self.buttonvisibility[0]: # if CHARGE button is visible we let it blink on START
                 self.aw.buttonCHARGE.startAnimation()
@@ -14361,6 +14394,7 @@ class tgraphcanvas(QObject):
             self.aw.enableSaveActions()
             self.aw.resetCurveVisibilities()
             self.flagstart = False
+            self.aw.updateKaleidoCooldownButton()
             if self.aw.simulator:
                 self.aw.buttonSTARTSTOP.setStyleSheet(self.aw.pushbuttonstyles_simulator['STOP'])
             else:
@@ -14423,28 +14457,12 @@ class tgraphcanvas(QObject):
             if not self.checkSaved():
                 return
 
-            if (not self.roastpropertiesAutoOpenFlag and
-                    not self.roastpropertiesAutoOpenDropFlag and
-                    self.plus_beans_reminder_on_start and
-                    (self.plus_coffee is None and self.plus_blend_spec is None and self.beans == '')):
-                self.aw.open_roast_properties_dialog(start_recording_on_exit=True)
-                return
-
             self.aw.soundpopSignal.emit()
             if self.flagon and len(self.timex) == 1:
                 # we are already in monitoring mode, we just clear this first measurement and go
                 self.clearMeasurements(andLCDs=False)
             elif self.timex != []: # there is a profile loaded, we have to reset
                 self.reset(True,False,keepProperties=True)
-            try:
-                settings = QSettings()
-                starts = 0
-                if settings.contains('starts'):
-                    starts = toInt(settings.value('starts'))
-                settings.setValue('starts',starts+1)
-                settings.sync()
-            except Exception as e: # pylint: disable=broad-except
-                _log.exception(e)
             self.OnRecorder()
         #turn STOP
         else:
@@ -14529,7 +14547,11 @@ class tgraphcanvas(QObject):
                                 message = QApplication.translate('Message','Not enough data collected yet. Try again in a few seconds')
                                 self.aw.sendmessage(message)
                                 return
-                            if self.aw.pidcontrol.pidOnCHARGE and not self.aw.pidcontrol.pidActive: # Arduino/TC4, Hottop, MODBUS
+                            if (self.aw.kaleidoHybridControl and self.aw.kaleido is not None
+                                    and self.Controlbuttonflag):
+                                # Hybrid mode: CHARGE always enters M6 RoR-shape Hybrid control
+                                self.aw.pidcontrol.kaleidoEnterHybridOnCharge()
+                            elif self.aw.pidcontrol.pidOnCHARGE and not self.aw.pidcontrol.pidActive: # Arduino/TC4, Hottop, MODBUS
                                 self.aw.pidcontrol.pidOn()
                         if self.chargeTimerPeriod > 0:
                             self.aw.setTimerColor('timer')
@@ -17737,6 +17759,15 @@ class tgraphcanvas(QObject):
         else:
             offset = 0
         return self.timetemparray2temp(self.timeB,self.stemp1B,seconds + offset)
+
+    def backgroundDeltaBTat(self, seconds:float, relative:bool = False) -> float:
+        if not self.background or len(self.delta2B) == 0:
+            return -1
+        if self.timeindexB[0] > -1 and relative:
+            offset = self.timeB[self.timeindexB[0]]
+        else:
+            offset = 0
+        return self.timetemparray2temp(self.timeB, self.delta2B, seconds + offset)
 
     # returns the background temperature of extra curve n
     # with n=0 => extra device 1, curve 1; n=1 => extra device 1, curve 2; n=2 => extra device 2, curve 1,....

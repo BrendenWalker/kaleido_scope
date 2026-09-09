@@ -1,5 +1,5 @@
 #!/usr/bin/env bash
-# Run Artisan Kaleido from source during local development (macOS/Linux).
+# Run Kaleido Scope from source during local development (macOS/Linux).
 # Requires Python 3.12+ on PATH.
 
 set -euo pipefail
@@ -7,7 +7,7 @@ set -euo pipefail
 cd "$(dirname "$0")"
 
 echo
-echo "=== Artisan Kaleido local development startup ==="
+echo "=== Kaleido Scope local development startup ==="
 echo
 
 if ! command -v python3 >/dev/null 2>&1; then

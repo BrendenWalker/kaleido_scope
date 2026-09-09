@@ -1,15 +1,14 @@
 ---
 name: Bug Report
-description: Create a bug report to help us improve Artisan.  If you have a question please create a Discussion.
+description: Create a bug report to help us improve Kaleido Scope.  If you have a question please create a Discussion.
 labels: []
 body:
   - type: markdown
     attributes:
       # yamllint disable rule:line-length
       value: "
-        ### **Thanks for taking the time to fill out this bug report!  The Artisan team appreciates your support.**
+        ### **Thanks for taking the time to fill out this bug report!  The Kaleido Scope team appreciates your support.**
 
-        <img src='https://github.com/artisan-roaster-scope/artisan/raw/master/src/artisan.png' align='left' width='100' height='100'>
         ***To help us quickly solve your issue, please attach a sample profile `*.alog` file and your settings `*.aset` file (Help>> Save settings).
         Add screenshots if they help describe the problem.  Rename these files by adding `.txt` to the end of the file name.
         Add the files to the 'Problem Description' field below.  Do this by drag-and-drop, copy-paste, or clicking the link
@@ -30,7 +29,7 @@ body:
       description: Detailed steps to reproduce the behavior if not included in the description.
       placeholder: |
           Example:
-              1. Start Artisan after a factory reset
+              1. Start Kaleido Scope after a factory reset
               2. Open Config>> Events, go to Buttons tab
               3. Click on Add
               4. See error...
@@ -39,14 +38,11 @@ body:
 
   - type: dropdown
     attributes:
-      label: Artisan Version
+      label: Kaleido Scope Version
       description: Shown in the top window bar or in 'Help>> About'.
       options:
         -
-        - 4.0.0
-        - 4.0.1 Continuous Build
-        - 3.4.0
-        - 3.2.0
+        - 0.0.1
         - Other - include in Description
       default: 0
     validations:
@@ -54,7 +50,7 @@ body:
 
 #  - type: input
 #    attributes:
-#      label: Artisan Build Number
+#      label: Kaleido Scope Build Number
 #      description: Go to "Help>> About", the number in brackets ().
 #      placeholder: "Example: 4b4b3fa"
 #    validations:
@@ -71,8 +67,8 @@ body:
   - type: input
     attributes:
       label: Connected devices or roasting machine
-      description: What is connected to Artisan?
-      placeholder: "Example: Cogen C6"
+      description: What is connected to Kaleido Scope?
+      placeholder: "Example: Kaleido M6"
     validations:
       required: false
 

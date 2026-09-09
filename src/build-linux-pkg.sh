@@ -63,7 +63,7 @@ rm -rf usr/share/applications/._*
 
 sudo fpm -s dir -t rpm -n artisan --license GPL3 -m "Marko Luther <marko.luther@gmx.net>"  -p .. \
 --vendor "Artisan GitHub" \
---url "https://github.com/artisan-roaster-scope/artisan" \
+--url "https://github.com/BrendenWalker/kaleido_scope" \
 --description "This program or software helps coffee roasters record, analyze, and control
 roast profiles. With the help of a thermocouple data logger, or a
 proportional–integral–derivative controller (PID controller), this software
@@ -78,7 +78,7 @@ fakeroot chmod o+w .
 sudo fpm --deb-no-default-config-files -s dir -t deb -n artisan --license GPL3 -m "Marko Luther <marko.luther@gmx.net>" -p .. \
 --vendor "Artisan GitHub" \
 --no-auto-depends \
---url "https://github.com/artisan-roaster-scope/artisan" \
+--url "https://github.com/BrendenWalker/kaleido_scope" \
 --description "This program or software helps coffee roasters record, analyze, and control
 roast profiles. With the help of a thermocouple data logger, or a
 proportional–integral–derivative controller (PID controller), this software
