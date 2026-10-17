@@ -42,7 +42,7 @@ xlrd==2.0.2
 websockets==16.0
 PyYAML==6.0.3
 psutil==7.2.2
-numpy==2.5.1
+numpy==2.5.4
 scipy==1.18.1
 wquantiles==0.6
 colorspacious==1.1.2
