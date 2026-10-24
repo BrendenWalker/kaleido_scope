@@ -11,7 +11,7 @@ types-setuptools>=82.0.0.20260210
 types-urllib3>=1.26.25.14
 types-docutils>=0.23.0.20260923
 types-xlrd>=2.0.0.20260518
-types-qrcode>=8.2.0.20260322
+types-qrcode>=8.2.0.20260518
 lxml-stubs>=0.5.1
 mypy==2.4.0
 pyright==1.1.408
