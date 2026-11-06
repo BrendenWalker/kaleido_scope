@@ -1,0 +1,91 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<title>Roast day — Energy latch check</title>
+<style>
+  @page { size: letter; margin: 0.55in; }
+  * { box-sizing: border-box; }
+  body {
+    margin: 0;
+    color: #111;
+    font: 11.5pt/1.35 "Segoe UI", Calibri, sans-serif;
+  }
+  h1 { font-size: 16pt; margin: 0 0 2px; }
+  .sub { margin: 0 0 10px; color: #333; }
+  h2 { font-size: 12pt; margin: 12px 0 4px; border-bottom: 1px solid #222; }
+  p { margin: 4px 0; }
+  ul { margin: 4px 0 0 1.1em; padding: 0; }
+  li { margin: 2px 0; }
+  table { width: 100%; border-collapse: collapse; margin-top: 4px; }
+  th, td { border: 1px solid #222; padding: 4px 6px; vertical-align: top; text-align: left; }
+  th { background: #eee; font-weight: 650; }
+  .meta td:first-child { width: 28%; font-weight: 650; }
+  .blank { border-bottom: 1px solid #222; display: inline-block; min-width: 2.2in; }
+  .note { margin-top: 8px; font-size: 10.5pt; }
+  @media print {
+    body { -webkit-print-color-adjust: exact; print-color-adjust: exact; }
+  }
+</style>
+</head>
+<body>
+  <h1>Energy latch check — one 600 g</h1>
+  <p class="sub">Branch <strong>refine_hybrid_control</strong> @ <strong>7f207eb3d</strong>. Backend stays <strong>Energy</strong>. Do not change PID, slews, schedule, or fan settings. Background is eyes only.</p>
+
+  <h2>Setup</h2>
+  <ul>
+    <li>Hybrid Controller on. Backend <strong>Energy</strong>. ET/BT = Kaleido.</li>
+    <li>One 600 g charge. Last week’s .alog on the Artisan background.</li>
+    <li>Warmup SV <strong>195</strong>. Start Heating. Hold <strong>25+ min</strong> after SV is first reached.</li>
+    <li>START, then CHARGE as you dump. Mark DRY, FCs, and DROP. Do not touch the sliders.</li>
+  </ul>
+  <p>The latch does not use charge BT. After CHARGE it stays in <strong>Charge</strong> until BT has been below <strong>100 °C</strong>, or <strong>90 s</strong>, or you mark DRY. Last roast labeled a hot charge as Maillard, so heater and fan slammed in the first half minute and FCs RoR sat near 14 °C/min instead of about 10.</p>
+
+  <h2>Watch</h2>
+  <table>
+    <thead>
+      <tr><th>When</th><th>Good</th><th>Bad — note it, or abort</th></tr>
+    </thead>
+    <tbody>
+      <tr>
+        <td>First ~30 s after CHARGE</td>
+        <td>Heater high and steady. Fan low. No flicker.</td>
+        <td>Heater 48→5→95 or fan 30→0→70</td>
+      </tr>
+      <tr>
+        <td>Drying</td>
+        <td>Fan sits around 20–30%. Heater high. RoR climbs, then eases.</td>
+        <td>Fan chattering</td>
+      </tr>
+      <tr>
+        <td>FCs window</td>
+        <td>RoR already declining, about 8–11 °C/min. Fan steps up after crack.</td>
+        <td>RoR still ~14, or a crash</td>
+      </tr>
+      <tr>
+        <td>DROP</td>
+        <td>Heater snaps to 0 within a few seconds.</td>
+        <td>Heat lingers</td>
+      </tr>
+    </tbody>
+  </table>
+  <p class="note">Phase is not on screen. Judge the latch from that first-30-seconds actuator trace. If the heater runs away, the fan stalls, or it oscillates fast: abort to Machine PID. Do not retune mid-roast.</p>
+
+  <h2>Hand notes (the log will not have these)</h2>
+  <table class="meta">
+    <tr><td>Date</td><td></td></tr>
+    <tr><td>Lot / bag age</td><td></td></tr>
+    <tr><td>Charge weight</td><td>600 g</td></tr>
+    <tr><td>Ambient / RH</td><td></td></tr>
+    <tr><td>Preheat hold after SV (min)</td><td></td></tr>
+    <tr><td>Build</td><td>refine_hybrid_control @ 7f207eb3d</td></tr>
+    <tr><td>Backend</td><td>Energy</td></tr>
+    <tr><td>Sliders touched?</td><td>Y / N</td></tr>
+    <tr><td>First 30 s</td><td>steady / slammed</td></tr>
+    <tr><td>Fan</td><td>quiet then step / sawtooth</td></tr>
+    <tr><td>FCs RoR</td><td>about ________ °C/min &nbsp;&nbsp; scary? Y / N</td></tr>
+    <tr><td>DROP heat to 0?</td><td>Y / N</td></tr>
+    <tr><td>.alog filename</td><td></td></tr>
+  </table>
+</body>
+</html>

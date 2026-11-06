@@ -732,3 +732,13 @@ class TestKaleidoImplementationDetails:
 #        # Test Heater/Fan retrieval (converts int to float)
 #        result = get_heater_fan_values(75, 50)
 #        assert result == (75.0, 50.0)
+
+
+def test_cooldown_survives_post_drop_recording() -> None:
+    """The cooling curve stays recording. Cooldown must keep running there."""
+    from artisanlib.kaleido import cooldown_should_abort
+
+    assert cooldown_should_abort(monitoring=True, recording=True, drop_marked=True) is False
+    assert cooldown_should_abort(monitoring=True, recording=False, drop_marked=True) is False
+    assert cooldown_should_abort(monitoring=True, recording=True, drop_marked=False) is True
+    assert cooldown_should_abort(monitoring=False, recording=False, drop_marked=True) is True

@@ -293,6 +293,7 @@ class ProfileData(TypedDict, total=False):
     gain_scheduling: bool
     gain_scheduling_on_SV: bool
     gain_scheduling_quadratic: bool
+    hybridControlBackend: str  # "energy" | "mpc"; backend that ran this roast. Not applied on open.
     devices: list[str]
     elevation: int
     computed: ComputedProfileInformation

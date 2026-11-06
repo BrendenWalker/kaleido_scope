@@ -269,7 +269,8 @@ Lite MPC must **reuse** twin / plant equations—no second competing model.
 
 **Log-refined** defaults from the 23-roast corpus are the design intent and the values coded in
 `hybrid_controller.py`. The earlier “shipped vs refined” tables below record how those numbers were
-chosen.
+chosen. Maillard is the exception: the coded end is 7 °C/min (the corpus line ended at 10) so RoR
+is already falling before first crack.
 
 Corpus notes: weights ≈ 600 g; DROP ≈ 190–205 °C; roast length CHARGE→DROP ≈ 8–11 min; FCs BT
 cluster ≈ 178–188 °C. Stats use post-TP rising phases; RoR is a 30 s BT window (°C/min).
@@ -283,7 +284,7 @@ Interpolate within phase by BT between phase entry/exit bounds.
 | Charge (post-TP peak) | 22 → 22 | 22 → 22 | 22 → 22 | BT 90–110 median RoR ≈ 21–22 |
 | Drying | 22 → 16 (BT 100–150) | **22 → 15.5** | 22 → 15.5 | Phase start/end medians ≈ 18.6 → 15.6; BT-bin at 140–150 ≈ 15.4 |
 | Yellow | 16 → 14 (150–170) | **15 → 14** | 15 → 14 | Phase ≈ 15.2 → 14.3; BT-bin 150–170 ≈ 14.7 → 14.0 |
-| Maillard | 12 → 10 (170–195) | **14 → 10** | 14 → 10 | Phase ≈ 14.3 → 12.0 into FCs; BT-bin 170–190 ≈ 13.0 → 10.3 |
+| Maillard | 12 → 10 (170–195) | **14 → 10** | **14 → 7** | Corpus 14.3 → 12.0 into FCs. Gaenke 2026-11-01 stayed ~11 through FCs on 14→10; coded end is 7 |
 | FirstCrack | 8.5 → 8.5 | 11 → 9 | **10 → 7** (BT 180–195) | Field AB: flatter post-FC RoR compressed development; steeper target + soft-brake |
 | Development | 8 → 5.5 | 9 → 5.5 | **7 → 3.5** | Auto-enter Dev after FCs once BT ≥ 190 even without FCe |
 
@@ -901,7 +902,7 @@ Also: `scripts/analyze_kaleido_alogs.py --input path/to/alogs` for phase / step-
 
 - Mock `KaleidoPort`; verify `sample_processing` calls MPC when backend=`mpc`
 - Verify HP/FC not double-commanded by Energy and MPC simultaneously
-- Field: weekly 600 g Hybrid refinement (MPC daily driver, Energy abort). See [`hybrid_field_ab_plan.md`](hybrid_field_ab_plan.md). Compare RoR shape and actuator travel to last week / an Energy reference; do not require same-day A/B pairs.
+- Field: weekly 600 g Hybrid refinement. The method under test is the **Now testing** line in [`hybrid_field_ab_plan.md`](hybrid_field_ab_plan.md) (currently Energy, not MPC). Saved `.alog` files record it as `hybridControlBackend`. Compare RoR shape and actuator travel to last week; do not require same-day A/B pairs.
 
 ---
 
@@ -972,7 +973,7 @@ If the solver fails or times out: call the EnergyController path for that tick.
 |-------|------------|------|------|--------------------|
 | Drying (post-TP) | 85 (PID de-weighted) | 90 | 30 | 22 → 15.5 |
 | Yellow | 65 | 85 | 35 | 15 → 14 |
-| Maillard | 45 | 80 | 40 | 14 → 10 |
+| Maillard | 45 | 80 | 40 | 14 → 7 |
 | FirstCrack | 30 | 40 | 60 | 10 → 7 |
 | Development | 10 | 25 | 70 (trim to 80–100 OK) | 7 → 3.5 |
 | Cooling | 25 | 0 | 80 | 0 |

@@ -96,9 +96,9 @@ Control architecture: spec §18 “Machine profile YAML / UI presets”; spec §
 2. MPC fan hunting (sawtooth FC vs Energy) until actuator travel is in the same neighborhood as a good Energy roast.
 3. **Then** consider defaulting Hybrid backend to MPC.
 
-**Gate (do not skip):** two consecutive weekly 600 g MPC roasts you would sell, same build, fan not sawtoothing. Abort remains Energy. Details: [hybrid_field_ab_plan.md](hybrid_field_ab_plan.md).
+**Gate (do not skip):** two consecutive weekly 600 g MPC roasts you would sell, same build, fan not sawtoothing. That gate is not the current weekly roast. The method under test is the **Now testing** line in [hybrid_field_ab_plan.md](hybrid_field_ab_plan.md) (Energy). Saved `.alog` files record it as `hybridControlBackend`.
 
-Defaulting MPC now is rejected until that streak exists.
+Defaulting MPC now is rejected until that streak exists, and until **Now testing** is edited to name MPC.
 
 ---
 

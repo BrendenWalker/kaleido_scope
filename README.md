@@ -35,7 +35,7 @@ Hybrid does **not** follow a background profile. Background is for eyes only.
 |-------|--------------|------|------|
 | Drying | 22 → 15.5 | 90 | 30 |
 | Yellow | 15 → 14 | 85 | 35 |
-| Maillard | 14 → 10 | 80 | 40 |
+| Maillard | 14 → 7 | 80 | 40 |
 | First crack | 10 → 7 | 40 | 60 |
 | Development | 7 → 3.5 | 25 | 70 |
 

@@ -21,7 +21,9 @@ from artisanlib.hybrid_controller import (
     compute_ror_acceleration,
     create_controller_backend,
     detect_roast_phase,
+    hold_heater_through_decline,
     interpolate_ror_target,
+    logged_hybrid_backend,
     normalize_control_backend,
     predict_ror,
     update_post_tp_latch,
@@ -166,11 +168,14 @@ class TestRorShape:
         fc_start = interpolate_ror_target(180.0, RoastPhase.FirstCrack, config)
         fc_end = interpolate_ror_target(195.0, RoastPhase.FirstCrack, config)
         dev_end = interpolate_ror_target(210.0, RoastPhase.Development, config)
+        maillard_end = interpolate_ror_target(195.0, RoastPhase.Maillard, config)
         assert maillard_start == pytest.approx(14.0)
+        assert maillard_end == pytest.approx(7.0)
         assert fc_start == pytest.approx(10.0)
         assert fc_end == pytest.approx(7.0)
         assert dev_end == pytest.approx(3.5)
-        assert maillard_start > fc_end > dev_end
+        assert maillard_start > maillard_end == pytest.approx(fc_end)
+        assert fc_end > dev_end
 
     def test_planner_matches_interpolate(self, config: HybridControllerConfig) -> None:
         planner = RoastPlanner(config)
@@ -185,7 +190,7 @@ class TestRorShape:
         assert DEFAULT_BASELINE_FAN[RoastPhase.FirstCrack] == 60.0
         assert DEFAULT_BASELINE_FAN[RoastPhase.Development] == 70.0
         assert DEFAULT_ET_BT_OFFSETS[RoastPhase.Development] == 10.0
-        assert DEFAULT_ROR_SHAPE[RoastPhase.Maillard] == (14.0, 10.0)
+        assert DEFAULT_ROR_SHAPE[RoastPhase.Maillard] == (14.0, 7.0)
         assert DEFAULT_ROR_SHAPE[RoastPhase.FirstCrack] == (10.0, 7.0)
         assert DEFAULT_ROR_SHAPE[RoastPhase.Development] == (7.0, 3.5)
 
@@ -307,6 +312,54 @@ class TestHybridController:
         hc.activate()
         _, fc_crash = hc.update(185.0, 220.0, 4.0, 0.0, timeindex, 1.0)
         assert fc_crash > fc_ok
+
+    def test_yellow_decline_does_not_add_heater(self, config: HybridControllerConfig) -> None:
+        """A falling undershoot in Yellow must not raise HP. A flat one may."""
+        assert hold_heater_through_decline(RoastPhase.Yellow, 14.5, 11.0, -0.3)
+        assert not hold_heater_through_decline(RoastPhase.Yellow, 14.5, 11.0, 0.0)
+        assert not hold_heater_through_decline(RoastPhase.Maillard, 14.0, 11.0, -0.3)
+        assert not hold_heater_through_decline(RoastPhase.Yellow, 14.5, 14.4, -0.3)
+        # Latched hold survives an accel blip while the gap is still above 1.
+        assert hold_heater_through_decline(
+            RoastPhase.Yellow, 14.5, 11.0, 0.2, latched=True)
+        assert not hold_heater_through_decline(
+            RoastPhase.Yellow, 14.5, 13.8, -0.3, latched=True)
+        assert not hold_heater_through_decline(
+            RoastPhase.Maillard, 14.0, 11.0, -0.3, latched=True)
+
+        config.heater_slew_pct_per_sec = 100.0
+        config.fan_slew_pct_per_sec = 100.0
+        # BT 160, ET−BT 65 matches the Yellow offset so the fan PID stays quiet.
+        bt, et, target = 160.0, 225.0, 14.5
+
+        falling = EnergyController(config)
+        falling._last_hp = 85.0
+        falling._last_fc = 35.0
+        held: list[int] = []
+        for _ in range(5):
+            hp, _ = falling.update(bt, et, 11.0, target, -0.3, RoastPhase.Yellow, 1.0)
+            held.append(hp)
+        assert falling._yellow_hold
+        hp_blip, _ = falling.update(bt, et, 11.0, target, 0.2, RoastPhase.Yellow, 1.0)
+        held.append(hp_blip)
+        assert falling._yellow_hold
+        assert max(held) <= 85
+        assert falling._heater_pid._integral <= 0.0
+        falling.update(bt, et, 13.8, target, 0.0, RoastPhase.Yellow, 1.0)
+        assert not falling._yellow_hold
+
+        flat = EnergyController(config)
+        flat._last_hp = 85.0
+        flat._last_fc = 35.0
+        hp_flat, _ = flat.update(bt, et, 11.0, target, 0.0, RoastPhase.Yellow, 1.0)
+        assert hp_flat > 85
+        assert not flat._yellow_hold
+
+    def test_logged_backend_omits_a_roast_that_never_entered_hybrid(self) -> None:
+        assert logged_hybrid_backend(None) is None
+        assert logged_hybrid_backend('  ') is None
+        assert logged_hybrid_backend('MPC') == 'mpc'
+        assert logged_hybrid_backend('energy') == 'energy'
 
     def test_schedule_lookup(self, controller: HybridController) -> None:
         offset, fc, hp = controller.get_schedule(RoastPhase.FirstCrack)

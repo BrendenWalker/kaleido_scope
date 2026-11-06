@@ -4973,8 +4973,10 @@ class tgraphcanvas(QObject):
                         except Exception as e: # pylint: disable=broad-except
                             _log.exception(e)
 
-                    # Kaleido Hybrid Controller: M6 RoR-shape + thermal twin + phase HP/FC (after CHARGE)
-                    if (not self.aw.kaleidoCooldownActive and self.Controlbuttonflag
+                    # Kaleido Hybrid Controller: M6 RoR-shape + thermal twin + phase HP/FC (after CHARGE).
+                    # DROP hands the fan off (another-batch prompt); do not keep chasing RoR.
+                    if (not self.aw.kaleidoCooldownActive and not self.aw.kaleidoDropHandoff
+                            and self.Controlbuttonflag
                             and self.aw.pidcontrol.pidActive and
                             self.aw.pidcontrol.externalPIDControl() == 5 and self.aw.kaleido is not None and
                             self.timeindex[0] > -1):
@@ -7764,6 +7766,7 @@ class tgraphcanvas(QObject):
             self.resetTimer()
 
             self.roastUUID = None # reset UUID
+            self.aw.recordedHybridControlBackend = None
             self.roastbatchnr = 0 # initialized to 0, set to increased batchcounter on DROP
             self.roastbatchpos = 1 # initialized to 1, set to increased batchsequence on DROP
             self.roastbatchprefix = self.batchprefix
@@ -13241,6 +13244,10 @@ class tgraphcanvas(QObject):
             try:
                 # disconnect Kaleido
                 if not bool(self.aw.simulator) and self.device == 138 and self.aw.kaleido is not None:
+                    # Yes on another-batch left machine PID running. pidOff does not
+                    # talk to Kaleido, so kill the actuators before the port closes.
+                    if self.aw.kaleidoDropHandoff and not self.aw.kaleidoCooldownActive:
+                        self.aw.kaleido.allControlsOff()
                     self.aw.kaleido.stop()
                     self.aw.kaleido = None
             except Exception as e: # pylint: disable=broad-except
@@ -13282,6 +13289,7 @@ class tgraphcanvas(QObject):
             self.aw.updateSlidersVisibility() # update visibility of sliders based on the users preference
             self.aw.update_minieventline_visibility()
             self.aw.updateExtraButtonsVisibility()
+            self.aw.kaleidoDropHandoff = False
             if self.aw.kaleidoCooldownActive:
                 self.aw.stopKaleidoCooldown(turn_off=True)
             else:
@@ -13345,6 +13353,19 @@ class tgraphcanvas(QObject):
 
     def OffMonitor(self, respectAlwaysON:bool = True) -> None:
         _log.info('MODE: OFF MONITOR')
+        # Cooldown owns the machine until BT < 50°C. Ending the log must not shut it off.
+        if self.flagon and self.aw.kaleidoCooldownActive:
+            if self.flagstart:
+                self.OffRecorder(autosave=True, enableButton=True)
+            self.aw.sendmessage(QApplication.translate(
+                'Message', 'Cooldown continues until BT < 50°C. Press COOLING… to cancel.'))
+            return
+        # Yes on another-batch: first OFF ends the log and leaves the SV hold up.
+        if self.flagon and self.flagstart and self.aw.kaleidoDropHandoff:
+            self.OffRecorder(autosave=True, enableButton=True)
+            self.aw.sendmessage(QApplication.translate(
+                'Message', 'Recording stopped. Heating hold stays on. Press OFF again to shut down.'))
+            return
         if self.flagon:
             try:
                 # reset
@@ -14913,6 +14934,10 @@ class tgraphcanvas(QObject):
                             self.updateAmbientPressure()
                         except Exception as e: # pylint: disable=broad-except
                             _log.exception(e)
+                        # Still holding the profile lock, so the sample thread cannot hunt the fan
+                        # between this DROP and the another-batch prompt.
+                        if self.timeindex[6] > 0:
+                            self.aw.armKaleidoDropHandoff()
                 else:
                     message = QApplication.translate('Message','DROP: Scope is not recording')
                     self.aw.sendmessage(message)
@@ -14933,6 +14958,7 @@ class tgraphcanvas(QObject):
                         if removed:
                             if self.alignEvent not in {6, 7}:
                                 self.updateBackground()
+                            self.aw.cancelKaleidoDropHandoff()
                             self.aw.buttonDROP.setFlat(False)
                             if self.timeindex[5] == 0: # reactivate the SCe button if not yet set
                                 self.aw.buttonSCe.setFlat(False)

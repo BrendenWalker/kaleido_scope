@@ -79,7 +79,8 @@ DEFAULT_ROR_SHAPE: Final[dict[RoastPhase, tuple[float, float]]] = {
     RoastPhase.Charge: (22.0, 22.0),
     RoastPhase.Drying: (22.0, 15.5),
     RoastPhase.Yellow: (15.0, 14.0),
-    RoastPhase.Maillard: (14.0, 10.0),
+    # 14 → 7 on the same 170–195 span so the decline is underway before FCs.
+    RoastPhase.Maillard: (14.0, 7.0),
     # Steeper post-FC decline so development time is not compressed
     RoastPhase.FirstCrack: (10.0, 7.0),
     RoastPhase.Development: (7.0, 3.5),
@@ -305,6 +306,33 @@ def interpolate_ror_target(bt: float, phase: RoastPhase, config: HybridControlle
     return start_ror + t * (end_ror - start_ror)
 
 
+def hold_heater_through_decline(
+    phase: RoastPhase,
+    target_ror: float,
+    current_ror: float,
+    ror_accel: float,
+    latched: bool = False,
+) -> bool:
+    """Yellow only: do not add HP through a falling undershoot.
+
+    Arms when RoR is more than 0.3 °C/min under target and still falling.
+    Once latched, a one-sample accel blip does not release it. Release when
+    the gap is under 1 °C/min, or the phase is no longer Yellow.
+
+    ponytail: one bool, no timer. Ceiling: a flat undershoot that never
+    crossed the arming accel still takes heat. A dip that bottoms with the
+    gap still above 1 °C/min stays held.
+    """
+    if phase != RoastPhase.Yellow:
+        return False
+    gap = target_ror - current_ror
+    if latched:
+        return gap > 1.0
+    if ror_accel >= -0.05:
+        return False
+    return gap > 0.3
+
+
 def compute_ror_acceleration(ror_samples: list[float], dt: float) -> float:
     """Finite-difference RoR acceleration from recent samples."""
     if len(ror_samples) < 2 or dt <= 0:
@@ -460,7 +488,7 @@ class EnergyController:
 
     __slots__ = (
         'config', '_heater_pid', '_fan_pid', '_twin',
-        '_last_hp', '_last_fc',
+        '_last_hp', '_last_fc', '_yellow_hold',
     )
 
     def __init__(self, config: HybridControllerConfig) -> None:
@@ -471,6 +499,7 @@ class EnergyController:
         self._twin = ThermalStateEstimator(config)
         self._last_hp = 0.0
         self._last_fc = 0.0
+        self._yellow_hold = False
 
     def reset(self) -> None:
         self._heater_pid.reset()
@@ -478,6 +507,7 @@ class EnergyController:
         self._twin.reset()
         self._last_hp = 0.0
         self._last_fc = 0.0
+        self._yellow_hold = False
 
     def get_schedule(self, phase: RoastPhase) -> tuple[float, float, float]:
         offset = self.config.et_bt_offsets.get(phase, DEFAULT_ET_BT_OFFSETS.get(phase, 45.0))
@@ -538,7 +568,17 @@ class EnergyController:
         ror_error = target_ror - effective_ror
         trend_scale = self._trend_scale(target_ror - current_ror, ror_accel, phase)
 
-        hp_trim_raw = self._heater_pid.update(target_ror, effective_ror, dt) * trend_scale
+        self._yellow_hold = hold_heater_through_decline(
+            phase, target_ror, current_ror, ror_accel, latched=self._yellow_hold)
+        if self._yellow_hold:
+            # Skip the update so the undershoot is not integrated, and drop
+            # HP-up windup already stored. Leave a negative integral alone.
+            if self._heater_pid._integral > 0.0:
+                self._heater_pid._integral = 0.0
+            self._heater_pid._last_error = target_ror - current_ror
+            hp_trim_raw = 0.0
+        else:
+            hp_trim_raw = self._heater_pid.update(target_ror, effective_ror, dt) * trend_scale
         heater_w = self.config.phase_heater_weight.get(
             phase, DEFAULT_PHASE_HEATER_WEIGHT.get(phase, 0.5))
         air_w = max(0.0, 1.0 - heater_w)
@@ -765,6 +805,13 @@ def normalize_control_backend(backend: str | None) -> str:
         _log.warning('Unknown hybridControlBackend %r; using %s', backend, DEFAULT_CONTROL_BACKEND)
         return DEFAULT_CONTROL_BACKEND
     return name
+
+
+def logged_hybrid_backend(recorded: str | None) -> str | None:
+    """Backend to write on an alog. None means this roast never entered Hybrid."""
+    if recorded is None or not recorded.strip():
+        return None
+    return normalize_control_backend(recorded)
 
 
 def create_controller_backend(

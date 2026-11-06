@@ -182,6 +182,7 @@ class PIDcontrol:
     def kaleidoEnterHybridOnCharge(self) -> None:
         if self.aw.kaleido is None or not self.aw.qmc.Controlbuttonflag:
             return
+        self.aw.kaleidoDropHandoff = False
         self.aw.kaleido.pidOFF()
         # Hybrid will command HP; ensure heaters are enabled regardless of Start Heating UI state
         self.aw.kaleido.ensureHeating(True)
@@ -189,7 +190,9 @@ class PIDcontrol:
         self.aw.hybrid_controller.activate()
         self.pidActive = True
         self.aw.buttonCONTROL.setStyleSheet(self.aw.pushbuttonstyles['PIDactive'])
+        from artisanlib.hybrid_controller import logged_hybrid_backend
         backend = getattr(self.aw.hybrid_controller, 'backend_name', self.aw.hybridControlBackend)
+        self.aw.recordedHybridControlBackend = logged_hybrid_backend(backend)
         self.aw.sendmessage(
             QApplication.translate('Message','Hybrid Controller ON ({})').format(backend))
 

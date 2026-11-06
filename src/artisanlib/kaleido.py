@@ -45,6 +45,18 @@ class State(TypedDict, total=False):
     AH:int     # auto heating mode (0: off, 1: on)
     HS:int     # heating (0: off, 1: on)
 
+def cooldown_should_abort(monitoring: bool, recording: bool, drop_marked: bool) -> bool:
+    """True when a Kaleido cooldown must stop.
+
+    A recording that has not reached DROP is a new roast and aborts cooldown.
+    The post-DROP cooling curve stays recording and must keep the cooldown.
+    A stopped monitor aborts it because nothing is left to read BT.
+    """
+    if not monitoring:
+        return True
+    return recording and not drop_marked
+
+
 class KaleidoPort:
 
     __slots__ = [ '_asyncLoopThread', '_write_queue', '_running', '_default_data_stream', '_ping_timeout', '_open_timeout', '_init_timeout',

@@ -203,6 +203,7 @@ from artisanlib.hybrid_controller import (
     HybridController,
     HybridControllerConfig,
     create_controller_backend,
+    logged_hybrid_backend,
     normalize_control_backend,
 )
 
@@ -1371,7 +1372,7 @@ class ApplicationWindow(QMainWindow):
         'seriallog', 'ser', 'extraser', 'extracomport', 'extrabaudrate',
         'extrabytesize', 'extraparity', 'extrastopbits', 'extratimeout', 'pidcontrol', 'soundflag', 'recentRoasts', 'maxRecentRoasts',
         'kaleido_default_host', 'kaleidoHost', 'kaleidoPort', 'kaleidoSerial', 'kaleidoPID', 'kaleidoHybridControl',
-        'hybridControlBackend', 'hybridHeaterKp', 'hybridHeaterKi', 'hybridHeaterKd', 'hybridFanKp', 'hybridFanKi', 'hybridFanKd',
+        'hybridControlBackend', 'recordedHybridControlBackend', 'hybridHeaterKp', 'hybridHeaterKi', 'hybridHeaterKd', 'hybridFanKp', 'hybridFanKi', 'hybridFanKd',
         'hybridHeaterSlew', 'hybridFanSlew', 'hybridRorAccelGain', 'hybridHeaterTrimLimit', 'hybridCrashRorMargin', 'hybridCrashFcGain',
         'hybrid_controller', 'kaleido', 'kaleidoEventFlags', 'HottopControlActive',
         'lcdpaletteB', 'lcdpaletteF', 'extraeventsbuttonsflags', 'extraeventslabels', 'extraeventbuttoncolor', 'extraeventsactionstrings',
@@ -1399,7 +1400,7 @@ class ApplicationWindow(QMainWindow):
         'pushbuttonstyles_simulator', 'pushbuttonstyles', 'standard_button_tiny_height', 'standard_button_small_height', 'standard_button_height',
         'buttonONOFF', 'buttonSTARTSTOP', 'buttonFCs', 'buttonFCe', 'buttonSCs', 'buttonSCe', 'buttonRESET', 'buttonCHARGE', 'buttonDROP',
         'buttonCONTROL', 'buttonCOOLDOWN', 'buttonEVENT', 'buttonSVp5', 'buttonSVp10', 'buttonSVp20', 'buttonSVm20', 'buttonSVm10', 'buttonSVm5', 'buttonDRY',
-        'buttonCOOL', 'lcd1', 'lcd2', 'lcd3', 'lcd4', 'lcd5', 'kaleidoCooldownActive',
+        'buttonCOOL', 'lcd1', 'lcd2', 'lcd3', 'lcd4', 'lcd5', 'kaleidoCooldownActive', 'kaleidoDropHandoff',
         'lcd6', 'lcd7', 'label2', 'label3', 'label4', 'label5', 'label6', 'label7', 'extraLCD1', 'extraLCD2', 'extraLCDlabel1', 'extraLCDlabel2',
         'extraLCDframe1', 'extraLCDframe2', 'extraLCDvisibility1', 'extraLCDvisibility2', 'extraCurveVisibility1', 'extraCurveVisibility2',
         'extraDelta1', 'extraDelta2', 'extraFill1', 'extraFill2', 'channel_tare_values', 'messagehist', 'eventlabel', 'eNumberSpinBox',
@@ -1668,6 +1669,7 @@ class ApplicationWindow(QMainWindow):
         self.kaleido:KaleidoPort|None = None # holds the Kaleido instance created on connect; reset to None on disconnect
         self.kaleidoEventFlags:list[bool] = [False, False, False, False, False, False, False ] # CHARGE, DRY, FCs, FCe, SCs, SCe, DROP
         self.kaleidoCooldownActive:bool = False # idle air/drum cooldown until BT < 50°C
+        self.kaleidoDropHandoff:bool = False # DROP released Hybrid; waiting on or holding another-batch choice
         # leftover machine handles: None for dedicated drivers, dead ports for
         # command parsers / Ports-dialog apply that still name Modbus/S7/WS/MQTT/Fuji
         self.santoker = None
@@ -1685,6 +1687,7 @@ class ApplicationWindow(QMainWindow):
 
         # Hybrid Controller settings
         self.hybridControlBackend:str = DEFAULT_CONTROL_BACKEND  # "energy" | "mpc"
+        self.recordedHybridControlBackend:str|None = None  # backend that ran this roast; not the live setting
         self.hybridHeaterKp:float = 3.0
         self.hybridHeaterKi:float = 0.5
         self.hybridHeaterKd:float = 0.1
@@ -15753,6 +15756,9 @@ class ApplicationWindow(QMainWindow):
                 self.qmc.profile_meter = decodeLocalStrict(profile['devices'][0], 'Unknown')
             else:
                 self.qmc.profile_meter = 'Unknown'
+            raw_backend = profile.get('hybridControlBackend')
+            self.recordedHybridControlBackend = logged_hybrid_backend(
+                raw_backend if isinstance(raw_backend, str) else None)
             if _log.isEnabledFor(logging.DEBUG):
                 _log.debug(self.profileQuality(m,True))
             return True
@@ -16509,6 +16515,11 @@ class ApplicationWindow(QMainWindow):
             profile['gain_scheduling'] = self.pidcontrol.pidGainScheduling
             profile['gain_scheduling_on_SV'] = self.pidcontrol.pidGainSchedulingSV
             profile['gain_scheduling_quadratic'] = self.pidcontrol.pidGainSchedulingQuadratic
+            # The backend that entered Hybrid at CHARGE. Opening a log must not
+            # switch the live controller, and a resave must keep this string.
+            logged_backend = logged_hybrid_backend(self.recordedHybridControlBackend)
+            if logged_backend is not None:
+                profile['hybridControlBackend'] = logged_backend
             try:
                 ds = list(self.qmc.extradevices)
                 ds.insert(0,self.qmc.device)
@@ -17194,6 +17205,91 @@ class ApplicationWindow(QMainWindow):
                 and not self.pidcontrol.pidActive):
             self.pidcontrol.pidOn()
 
+    # --- After DROP: stop Hybrid, then heat-hold or Kaleido cooldown ---
+
+    def kaleidoHybridDropEligible(self) -> bool:
+        """True when this roast is Kaleido Hybrid and DROP should hand the machine off."""
+        return (
+            self.kaleidoHybridControl
+            and self.kaleido is not None
+            and self.qmc.device == 138
+            and self.qmc.Controlbuttonflag
+            and self.pidcontrol.pidActive
+            and self.pidcontrol.externalPIDControl() == 5
+        )
+
+    def armKaleidoDropHandoff(self) -> None:
+        """Hybrid stops writing the fan at DROP. The another-batch prompt follows."""
+        if not self.kaleidoHybridDropEligible():
+            return
+        if not self.kaleidoDropHandoff:
+            self.kaleidoDropHandoff = True
+            from PyQt6.QtCore import QTimer
+            QTimer.singleShot(0, self.promptAnotherBatch)
+
+    def kaleidoBetweenBatchSV(self) -> tuple[float, str]:
+        """Setpoint a between-batch hold would command, and the text to show first."""
+        sv = self.pidcontrol.sv if self.pidcontrol.sv is not None else self.pidcontrol.svValue
+        sv_f = float(sv)
+        text = f'{sv_f:.1f}'.rstrip('0').rstrip('.')
+        return sv_f, text
+
+    def promptAnotherBatch(self) -> None:
+        if not self.kaleidoDropHandoff or self.kaleido is None or not self.qmc.flagon:
+            return
+        sv, sv_text = self.kaleidoBetweenBatchSV()
+        reply = QMessageBox.question(
+            self,
+            QApplication.translate('Message', 'Another batch?'),
+            QApplication.translate(
+                'Message',
+                'Yes holds SV {0}°{1} and sets the fan to the charge baseline. No starts cooldown.',
+            ).format(sv_text, self.qmc.mode),
+            QMessageBox.StandardButton.Yes | QMessageBox.StandardButton.No,
+            QMessageBox.StandardButton.No,
+        )
+        if not self.kaleidoDropHandoff or self.kaleido is None:
+            return
+        if reply == QMessageBox.StandardButton.Yes:
+            self.kaleidoHoldAtSetpoint(sv)
+        else:
+            self.startKaleidoCooldown()
+
+    def kaleidoHoldAtSetpoint(self, sv: float | None = None) -> None:
+        """Machine PID holds the current SV. Drum stays. Fan returns to the charge baseline.
+
+        Cooling air left on the fan cannot hold a setpoint. Charge baseline is the
+        air this roaster already uses before the beans go in.
+        """
+        if self.kaleido is None:
+            return
+        from artisanlib.hybrid_controller import DEFAULT_BASELINE_FAN, RoastPhase
+        if sv is None:
+            sv, sv_text = self.kaleidoBetweenBatchSV()
+        else:
+            sv = float(sv)
+            sv_text = f'{sv:.1f}'.rstrip('0').rstrip('.')
+        fan = int(DEFAULT_BASELINE_FAN[RoastPhase.Charge])
+        self.kaleidoDropHandoff = True
+        self.kaleido.ensureHeating(True)
+        self.kaleido.pidON()
+        self.kaleido.setSV(sv)
+        self.kaleido.setFan(fan)
+        self.addRawEventSignal.emit(fan, float(fan), 0, False, True, False)
+        self.sendmessage(QApplication.translate(
+            'Message', 'Heating to SV {0}°{1}. Check the setpoint before the next charge.'
+        ).format(sv_text, self.qmc.mode))
+
+    def cancelKaleidoDropHandoff(self) -> None:
+        """Undo DROP: Hybrid owns the heater and fan again."""
+        self.kaleidoDropHandoff = False
+        if self.kaleidoCooldownActive:
+            self.stopKaleidoCooldown(turn_off=False)
+        if (self.kaleidoHybridControl and self.kaleido is not None
+                and self.qmc.Controlbuttonflag and self.qmc.flagstart
+                and len(self.qmc.timeindex) > 0 and self.qmc.timeindex[0] > -1):
+            self.pidcontrol.pidOn()
+
     # --- Kaleido idle cooldown (air 100% / drum 10% until BT < 50°C) ---
 
     def kaleidoCooldownAvailable(self) -> bool:
@@ -17254,8 +17350,11 @@ class ApplicationWindow(QMainWindow):
         """Sample-loop tick: hold cooldown actuators until BT target, then shut down."""
         if not self.kaleidoCooldownActive or self.kaleido is None:
             return
-        # Abort if recording started or connection dropped mid-cooldown
-        if self.qmc.flagstart or not self.qmc.flagon:
+        # A new roast (recording, DROP not marked) or a dead monitor aborts cooldown.
+        # The post-DROP cooling curve is still recording and must keep it.
+        from artisanlib.kaleido import cooldown_should_abort
+        drop_marked = len(self.qmc.timeindex) > 6 and self.qmc.timeindex[6] > 0
+        if cooldown_should_abort(self.qmc.flagon, self.qmc.flagstart, drop_marked):
             self.stopKaleidoCooldown(turn_off=True)
             return
         try:
@@ -20132,7 +20231,12 @@ class ApplicationWindow(QMainWindow):
             self.showNormal()
         if self.simulator is None:
             if self.qmc.device == 138 and self.kaleido is not None:
-                # disconnect Kaleido
+                # Quit during a between-batch hold must not leave machine PID running.
+                if self.kaleidoDropHandoff and not self.kaleidoCooldownActive:
+                    try:
+                        self.kaleido.allControlsOff()
+                    except Exception as e:  # pylint: disable=broad-except
+                        _log.exception(e)
                 self.kaleido.stop()
                 self.kaleido = None
 
