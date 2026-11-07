@@ -63,6 +63,11 @@ dmypy.json
 *.swo
 *~
 
+# Roast logs stay on the machine. Do not commit them.
+*.alog
+# Checked-in fixtures. A roast log does not belong under src/test.
+!src/test/**/*.alog
+
 # OS generated files
 .DS_Store
 .DS_Store?
