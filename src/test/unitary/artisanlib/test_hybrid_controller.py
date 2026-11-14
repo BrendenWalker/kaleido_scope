@@ -55,13 +55,23 @@ class TestRoastPhaseDetection:
         timeindex = [10, 100, 500, 0, 0, 0, 0, 0]
         assert detect_roast_phase(timeindex, 185.0, config) == RoastPhase.FirstCrack
 
-    def test_auto_development_after_fcs_without_fce(self, config: HybridControllerConfig) -> None:
-        """Without FCe, BT past Development schedule start still enters Development."""
+    def test_hot_fcs_stays_first_crack_until_fc_end(
+        self, config: HybridControllerConfig,
+    ) -> None:
+        """FCs at 191.5 must not enter Development (Gaenke 2026-11-07 HP cliff)."""
         timeindex = [10, 100, 500, 0, 0, 0, 0, 0]
+        assert detect_roast_phase(timeindex, 191.5, config) == RoastPhase.FirstCrack
+        assert detect_roast_phase(timeindex, 194.9, config) == RoastPhase.FirstCrack
+
+    def test_auto_development_after_fcs_without_fce(self, config: HybridControllerConfig) -> None:
+        """Without FCe, BT past FirstCrack schedule end still enters Development."""
+        timeindex = [10, 100, 500, 0, 0, 0, 0, 0]
+        assert detect_roast_phase(timeindex, 195.0, config) == RoastPhase.Development
         assert detect_roast_phase(timeindex, 200.0, config) == RoastPhase.Development
 
     def test_development_after_fce(self, config: HybridControllerConfig) -> None:
         timeindex = [10, 100, 500, 600, 0, 0, 0, 0]
+        assert detect_roast_phase(timeindex, 191.5, config) == RoastPhase.Development
         assert detect_roast_phase(timeindex, 210.0, config) == RoastPhase.Development
 
     def test_bt_fallback_yellow(self, config: HybridControllerConfig) -> None:
@@ -290,7 +300,7 @@ class TestHybridController:
         config.fan_slew_pct_per_sec = 100.0
         hc = HybridController(config)
         hc.activate()
-        # Early FirstCrack BT (before auto-Development at 190)
+        # Early FirstCrack BT (before auto-Development at FirstCrack end)
         timeindex = [0, 100, 500, 0, 0, 0, 0, 0]
         _, fc_low = hc.update(185.0, 220.0, 8.0, 0.0, timeindex, 1.0)
         hc.reset()
@@ -310,8 +320,30 @@ class TestHybridController:
         _, fc_ok = hc.update(185.0, 220.0, 9.0, 0.0, timeindex, 1.0)
         hc.reset()
         hc.activate()
+        # Seed heater above the FirstCrack floor so crash air is still armed.
+        hc.energy._last_hp = 80.0
         _, fc_crash = hc.update(185.0, 220.0, 4.0, 0.0, timeindex, 1.0)
         assert fc_crash > fc_ok
+
+    def test_crash_fan_muted_when_heater_already_on_floor(
+        self, config: HybridControllerConfig,
+    ) -> None:
+        """Once HP is on the phase floor, crash air must not dig deeper."""
+        config.fan_slew_pct_per_sec = 100.0
+        config.heater_slew_pct_per_sec = 100.0
+        config.crash_fc_gain = 4.0
+        config.soft_brake_fc_gain = 0.0
+        timeindex = [0, 100, 500, 600, 0, 0, 0, 0]  # FCe → Development, floor 25
+        armed = EnergyController(config)
+        armed._last_hp = 80.0
+        armed._last_fc = 70.0
+        _, fc_armed = armed.update(196.0, 210.0, 1.0, 5.0, 0.0, RoastPhase.Development, 1.0)
+        muted = EnergyController(config)
+        muted._last_hp = 25.0
+        muted._last_fc = 70.0
+        _, fc_muted = muted.update(196.0, 210.0, 1.0, 5.0, 0.0, RoastPhase.Development, 1.0)
+        assert fc_armed > fc_muted
+        assert fc_muted < 100
 
     def test_yellow_decline_does_not_add_heater(self, config: HybridControllerConfig) -> None:
         """A falling undershoot in Yellow must not raise HP. A flat one may."""

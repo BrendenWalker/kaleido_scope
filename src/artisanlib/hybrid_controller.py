@@ -233,9 +233,11 @@ def detect_roast_phase(
 ) -> RoastPhase:
     """Derive roast phase from Artisan event indices with BT fallbacks.
 
-    After FCs, auto-advance into Development once BT reaches the Development
-    schedule start even if FCe was never marked — otherwise RoR targets stall
-    near the FirstCrack end value and development time collapses.
+    After FCs without FCe, stay in FirstCrack until BT reaches the FirstCrack
+    schedule end. Development's schedule start (190) overlaps a hot crack
+    (Gaenke 2026-11-07 FCs at 191.5 slammed HP 80→25 in one sample). Gate on
+    FirstCrack's upper bound so baselines and RoR target finish the crack
+    span before the Development floor.
 
     ``post_tp`` defaults True so callers without a latch keep the old BT
     fallbacks. After CHARGE and before DRY, pass False until the controller
@@ -247,9 +249,9 @@ def detect_roast_phase(
     if len(timeindex) > 3 and timeindex[3] > 0:
         return RoastPhase.Development
     if len(timeindex) > 2 and timeindex[2] > 0:
-        dev_bt_lo, _ = config.ror_bt_bounds.get(
-            RoastPhase.Development, DEFAULT_ROR_BT_BOUNDS[RoastPhase.Development])
-        if bt >= dev_bt_lo:
+        _, fc_bt_hi = config.ror_bt_bounds.get(
+            RoastPhase.FirstCrack, DEFAULT_ROR_BT_BOUNDS[RoastPhase.FirstCrack])
+        if bt >= fc_bt_hi:
             return RoastPhase.Development
         return RoastPhase.FirstCrack
     if len(timeindex) > 1 and timeindex[1] > 0:
@@ -612,7 +614,10 @@ class EnergyController:
         if phase in (RoastPhase.FirstCrack, RoastPhase.Development):
             under = (target_ror - self.config.crash_ror_margin) - current_ror
             if under > 0.0:
-                crash_trim = self.config.crash_fc_gain * under
+                # Heater already on the phase floor: more air digs the hole
+                # (Gaenke 2026-11-07 pinned FC at 100 after HP hit 25).
+                if self._last_hp > baseline_heater + 1.0:
+                    crash_trim = self.config.crash_fc_gain * under
             over = current_ror - (target_ror + self.config.soft_brake_ror_margin)
             if over > 0.0:
                 soft_brake_fc = self.config.soft_brake_fc_gain * over

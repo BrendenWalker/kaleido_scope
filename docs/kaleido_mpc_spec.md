@@ -286,7 +286,7 @@ Interpolate within phase by BT between phase entry/exit bounds.
 | Yellow | 16 → 14 (150–170) | **15 → 14** | 15 → 14 | Phase ≈ 15.2 → 14.3; BT-bin 150–170 ≈ 14.7 → 14.0 |
 | Maillard | 12 → 10 (170–195) | **14 → 10** | **14 → 7** | Corpus 14.3 → 12.0 into FCs. Gaenke 2026-11-01 stayed ~11 through FCs on 14→10; coded end is 7 |
 | FirstCrack | 8.5 → 8.5 | 11 → 9 | **10 → 7** (BT 180–195) | Field AB: flatter post-FC RoR compressed development; steeper target + soft-brake |
-| Development | 8 → 5.5 | 9 → 5.5 | **7 → 3.5** | Auto-enter Dev after FCs once BT ≥ 190 even without FCe |
+| Development | 8 → 5.5 | 9 → 5.5 | **7 → 3.5** | Auto-enter Dev after FCs once BT ≥ FirstCrack end (195) even without FCe; 190 overlapped a hot crack and slammed HP |
 
 BT-bin median RoR curve (CHARGE→DROP pooled, all 23 logs):
 
