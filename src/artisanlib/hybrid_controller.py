@@ -30,6 +30,11 @@ VALID_CONTROL_BACKENDS: Final[frozenset[str]] = frozenset({'energy', 'mpc'})
 DEFAULT_CONTROL_BACKEND: Final[str] = 'energy'
 # Hot-drum CHARGE is BT ~180–210; stay in Charge until TP or this timeout
 CHARGE_PLUNGE_TIMEOUT_S: Final[float] = 90.0
+# Post-FCs probe dip from CO₂ outgassing (Gaenke 2026-11-16): hold control RoR
+FC_OUTGAS_DIP_C: Final[float] = 0.25
+# First seconds of FirstCrack: soft-brake must not pin fan at 100
+EARLY_FC_SOFT_BRAKE_WINDOW_S: Final[float] = 30.0
+EARLY_FC_SOFT_BRAKE_SCALE: Final[float] = 0.3
 
 
 class RoastPhase(IntEnum):
@@ -161,6 +166,10 @@ class HybridControllerConfig:
     soft_brake_ror_margin: float = 0.5
     soft_brake_fc_gain: float = 1.5
     soft_brake_hp_gain: float = 2.5
+    # FirstCrack soft-brake authority for EARLY_FC_SOFT_BRAKE_WINDOW_S after FCs
+    early_fc_soft_brake_window_s: float = EARLY_FC_SOFT_BRAKE_WINDOW_S
+    early_fc_soft_brake_scale: float = EARLY_FC_SOFT_BRAKE_SCALE
+    fc_outgas_dip_c: float = FC_OUTGAS_DIP_C
     # Require at least this RoR accel (°C/min per s) before muting an overshoot
     min_decline_accel: float = -0.4
     # Twin energy_bias → actuator authority
@@ -306,6 +315,52 @@ def interpolate_ror_target(bt: float, phase: RoastPhase, config: HybridControlle
         return start_ror
     t = max(0.0, min(1.0, (bt - bt_lo) / (bt_hi - bt_lo)))
     return start_ror + t * (end_ror - start_ror)
+
+
+def sanitize_fc_outgas_ror(
+    fcs_marked: bool,
+    bt: float,
+    ror: float,
+    ror_accel: float,
+    prev_bt: float | None,
+    held_ror: float | None,
+    dip_c: float = FC_OUTGAS_DIP_C,
+) -> tuple[float, float, float | None, float | None]:
+    """After FCs, a short BT dip is CO₂ outgassing on the probe, not a crash.
+
+    Returns ``(control_ror, control_accel, new_prev_bt, new_held_ror)``.
+    While BT steps down against the last accepted sample, keep the prior
+    control RoR and zero accel so soft-brake / crash-air do not fire on the tip.
+
+    ponytail: one dip threshold, no filter class. Ceiling: a real BT stall that
+    lasts will still show up in the 30 s plot RoR; only the control sample is held.
+    """
+    if not fcs_marked:
+        return ror, ror_accel, bt, ror
+    if prev_bt is not None and bt < prev_bt - max(0.0, dip_c):
+        kept = held_ror if held_ror is not None else max(ror, 0.0)
+        return kept, 0.0, prev_bt, kept
+    return ror, ror_accel, bt, ror
+
+
+def early_fc_soft_brake_scale(
+    phase: RoastPhase,
+    seconds_since_fcs: float | None,
+    window_s: float = EARLY_FC_SOFT_BRAKE_WINDOW_S,
+    scale: float = EARLY_FC_SOFT_BRAKE_SCALE,
+) -> float:
+    """Reduce soft-brake for the first window of FirstCrack after FCs.
+
+    Gaenke 2026-11-16 entered crack at ~12 °C/min against a ~9 target and
+    pinned fan at 100 within 3 s. Full soft-brake returns after the window.
+    """
+    if phase != RoastPhase.FirstCrack:
+        return 1.0
+    if seconds_since_fcs is None or window_s <= 0.0:
+        return 1.0
+    if seconds_since_fcs >= window_s:
+        return 1.0
+    return max(0.0, min(1.0, scale))
 
 
 def hold_heater_through_decline(
@@ -550,9 +605,11 @@ class EnergyController:
         phase: RoastPhase,
         dt: float,
         et_ror: float = 0.0,
+        soft_brake_scale: float = 1.0,
     ) -> tuple[int, int]:
         target_offset, baseline_fan, baseline_heater = self.get_schedule(phase)
         machine = self.config.machine
+        brake_scale = max(0.0, min(1.0, soft_brake_scale))
 
         # Twin uses last commanded HP/FC so lag states stay causal
         twin_state = self._twin.update(
@@ -620,8 +677,8 @@ class EnergyController:
                     crash_trim = self.config.crash_fc_gain * under
             over = current_ror - (target_ror + self.config.soft_brake_ror_margin)
             if over > 0.0:
-                soft_brake_fc = self.config.soft_brake_fc_gain * over
-                soft_brake_hp = -self.config.soft_brake_hp_gain * over
+                soft_brake_fc = self.config.soft_brake_fc_gain * over * brake_scale
+                soft_brake_hp = -self.config.soft_brake_hp_gain * over * brake_scale
 
         bias_air = 0.0
         if phase in (RoastPhase.Maillard, RoastPhase.FirstCrack, RoastPhase.Development) and bias > 0.2:
@@ -718,6 +775,7 @@ class HybridController:
     __slots__ = (
         'config', 'planner', 'energy', '_last_update_time', 'active',
         '_last_hp', '_last_fc', '_post_tp', '_charge_time',
+        '_prev_bt', '_held_ror', '_fcs_time',
         'backend_name', 'diagnostics',
     )
 
@@ -730,6 +788,9 @@ class HybridController:
         self._last_fc = 0.0
         self._post_tp = False
         self._charge_time: float | None = None
+        self._prev_bt: float | None = None
+        self._held_ror: float | None = None
+        self._fcs_time: float | None = None
         self.active = False
         self.backend_name = DEFAULT_CONTROL_BACKEND
         self.diagnostics = HybridDiagnostics(backend=DEFAULT_CONTROL_BACKEND)
@@ -741,6 +802,9 @@ class HybridController:
         self._last_fc = 0.0
         self._post_tp = False
         self._charge_time = None
+        self._prev_bt = None
+        self._held_ror = None
+        self._fcs_time = None
         self.active = False
         self.diagnostics = HybridDiagnostics(backend=self.backend_name)
 
@@ -777,11 +841,28 @@ class HybridController:
             self._post_tp, self._charge_time, timeindex, bt, now, self.config)
         phase = detect_roast_phase(timeindex, bt, self.config, post_tp=self._post_tp)
         target_ror = self.planner.target_ror(bt, phase)
-        current_ror = ror if ror is not None else 0.0
+        raw_ror = ror if ror is not None else 0.0
         et_ror_v = et_ror if et_ror is not None else 0.0
 
+        fcs_marked = len(timeindex) > 2 and timeindex[2] > 0
+        if fcs_marked and self._fcs_time is None:
+            self._fcs_time = now
+        elif not fcs_marked:
+            self._fcs_time = None
+        seconds_since_fcs = (
+            None if self._fcs_time is None else max(0.0, now - self._fcs_time))
+
+        current_ror, control_accel, self._prev_bt, self._held_ror = sanitize_fc_outgas_ror(
+            fcs_marked, bt, raw_ror, ror_accel,
+            self._prev_bt, self._held_ror, dip_c=self.config.fc_outgas_dip_c)
+        brake_scale = early_fc_soft_brake_scale(
+            phase, seconds_since_fcs,
+            window_s=self.config.early_fc_soft_brake_window_s,
+            scale=self.config.early_fc_soft_brake_scale)
+
         hp, fc = self.energy.update(
-            bt, et, current_ror, target_ror, ror_accel, phase, dt, et_ror=et_ror_v)
+            bt, et, current_ror, target_ror, control_accel, phase, dt,
+            et_ror=et_ror_v, soft_brake_scale=brake_scale)
         self._last_hp = float(hp)
         self._last_fc = float(fc)
         twin = self.energy.thermal_state

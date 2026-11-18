@@ -2,6 +2,7 @@
 
 **Audience:** Operator who roasts **one ~600 g batch per week** on a Kaleido M6.  
 **Now testing:** **Energy.** Control mode is **Hybrid Controller**, Device backend **Energy** (`hybridControlBackend` = `energy`). Not Machine PID, not Software PID, and **not MPC**. MPC stays parked until this line is edited. The later switch is §10, and it is not this week's roast.  
+**This week's Energy knob (after Nov 16):** post-FCs probe-dip RoR hold + early FirstCrack soft-brake cap. Planned duration / roast level are **not** this knob — see [planned_duration_roast_level.md](planned_duration_roast_level.md).  
 **Goal:** Judge each week's Energy roast against last week. Change **one** Energy knob between weeks when the curve is not production-good (RoR shape + quiet fan).  
 **Canonical control docs:** [kaleido_mpc_spec.md](kaleido_mpc_spec.md) §19.4, [README.md](../README.md).
 

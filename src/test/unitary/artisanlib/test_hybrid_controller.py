@@ -21,11 +21,13 @@ from artisanlib.hybrid_controller import (
     compute_ror_acceleration,
     create_controller_backend,
     detect_roast_phase,
+    early_fc_soft_brake_scale,
     hold_heater_through_decline,
     interpolate_ror_target,
     logged_hybrid_backend,
     normalize_control_backend,
     predict_ror,
+    sanitize_fc_outgas_ror,
     update_post_tp_latch,
 )
 
@@ -427,6 +429,50 @@ class TestHybridController:
         hp_hi, fc_hi = ec.update(192.0, 220.0, 12.0, 7.0, 0.0, RoastPhase.Development, 1.0)
         assert fc_hi > fc_ok
         assert hp_hi < 40
+
+    def test_fc_outgas_dip_does_not_raise_fan(self, config: HybridControllerConfig) -> None:
+        """A −0.5 °C tip dip after FCs must not pin the fan (Gaenke 2026-11-16)."""
+        ror, accel, prev, held = sanitize_fc_outgas_ror(
+            True, 190.0, 10.0, -2.0, 190.5, 10.0, dip_c=0.25)
+        assert ror == 10.0
+        assert accel == 0.0
+        assert prev == 190.5
+        assert held == 10.0
+        ror2, _, prev2, _ = sanitize_fc_outgas_ror(
+            True, 191.0, 9.0, 0.0, prev, held, dip_c=0.25)
+        assert ror2 == 9.0
+        assert prev2 == 191.0
+        assert early_fc_soft_brake_scale(RoastPhase.FirstCrack, 5.0) == pytest.approx(0.3)
+        assert early_fc_soft_brake_scale(RoastPhase.FirstCrack, 30.0) == 1.0
+        assert early_fc_soft_brake_scale(RoastPhase.Development, 5.0) == 1.0
+
+        config.fan_slew_pct_per_sec = 100.0
+        config.heater_slew_pct_per_sec = 100.0
+        config.early_fc_soft_brake_scale = 0.3
+        config.early_fc_soft_brake_window_s = 30.0
+        timeindex = [10, 100, 500, 0, 0, 0, 0, 0]
+        steady = HybridController(config)
+        steady.activate()
+        steady.energy._last_hp = 70.0
+        steady.energy._last_fc = 70.0
+        _, fc_pre = steady.update(190.5, 215.0, 12.0, 0.0, timeindex, 0.0)
+        _, fc_dip = steady.update(190.0, 214.0, 1.0, -5.0, timeindex, 1.5)
+        assert fc_dip <= fc_pre + 5
+
+        early = EnergyController(config)
+        early._last_hp = 70.0
+        early._last_fc = 70.0
+        _, fc_early = early.update(
+            186.0, 214.0, 12.0, 9.0, 0.0, RoastPhase.FirstCrack, 1.0,
+            soft_brake_scale=0.3)
+        late = EnergyController(config)
+        late._last_hp = 70.0
+        late._last_fc = 70.0
+        _, fc_late = late.update(
+            186.0, 214.0, 12.0, 9.0, 0.0, RoastPhase.FirstCrack, 1.0,
+            soft_brake_scale=1.0)
+        assert fc_early < fc_late
+        assert fc_early < 100
 
     def test_drop_cuts_heater_immediately(self, config: HybridControllerConfig) -> None:
         """After DROP, HP must snap to 0 even with a slow heater slew."""

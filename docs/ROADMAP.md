@@ -104,6 +104,7 @@ Defaulting MPC now is rejected until that streak exists, and until **Now testing
 
 ## Later
 
+- Planned roast duration + roast-level presets (RoR decline aimed at an intended end): [planned_duration_roast_level.md](planned_duration_roast_level.md). After the post-FCs sensing / soft-brake fixes prove out.
 - Drum speed (RC) as a third actuator (needs a model; do not couple HP/FC/RC blindly).
 - Per-machine calibration wizard from local `.alog` files.
 - Adaptive / learned thermal response; historical-roast ML.
